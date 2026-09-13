@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">FinSpace</title>
+  <rect width="512" height="512" rx="72" fill="#ccff00"/>
+  <rect x="38" y="38" width="436" height="436" rx="48" fill="none" stroke="#050505" stroke-width="28"/>
+  <path d="M150 124h222v70H230v60h122v68H230v116h-80z" fill="#050505"/>
+</svg>

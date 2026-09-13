@@ -1,0 +1,16 @@
+{
+  "name": "FinSpace - Catatan Keuangan",
+  "short_name": "FinSpace",
+  "description": "Pencatat keuangan pribadi yang cepat dan nyaman dipakai di HP.",
+  "lang": "id-ID",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#f2eeee",
+  "theme_color": "#ccff00",
+  "icons": [
+    { "src": "/assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Catat transaksi", "short_name": "Catat", "url": "/?action=capture", "icons": [{ "src": "/assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
+  ]
+}

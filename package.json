@@ -1,0 +1,10 @@
+{
+  "name": "finspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve . -l 4173",
+    "check": "node --check app.js && node --check api/gemini.js && node --check sw.js"
+  }
+}

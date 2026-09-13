@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ccff00" />
+    <meta name="description" content="FinSpace, pencatat keuangan pribadi yang cepat dan nyaman dipakai di HP." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>FinSpace</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Lewati ke konten</a>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navigasi utama">
+        <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="FinSpace, ke Beranda">
+          <span class="brand-mark" aria-hidden="true">F</span>
+          <span>FinSpace</span>
+          <small>LOCAL</small>
+        </a>
+
+        <nav class="desktop-nav" data-nav>
+          <button class="nav-item active" data-view="dashboard" type="button"><span>01</span> Beranda</button>
+          <button class="nav-item" data-view="history" type="button"><span>02</span> Riwayat</button>
+          <button class="nav-item" data-view="wallets" type="button"><span>03</span> Dompet</button>
+          <button class="nav-item" data-view="budgets" type="button"><span>04</span> Anggaran</button>
+          <button class="nav-item" data-view="settings" type="button"><span>05</span> Pengaturan</button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <span class="status-light" id="sidebar-status-light" aria-hidden="true"></span>
+          <span id="sidebar-status">Data tersimpan lokal</span>
+        </div>
+      </aside>
+
+      <div class="app-main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="greeting">SELAMAT DATANG</p>
+            <h1 id="page-title">Beranda</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="privacy-toggle" type="button" aria-label="Sembunyikan nominal" title="Sembunyikan nominal">◎</button>
+            <button class="button button-primary desktop-add" data-open-capture type="button"><span aria-hidden="true">＋</span> Catat transaksi</button>
+          </div>
+        </header>
+
+        <main id="main-content" tabindex="-1">
+          <section class="view active" id="view-dashboard" data-view-panel="dashboard" aria-labelledby="page-title">
+            <article class="balance-panel brutal-panel">
+              <div class="balance-copy">
+                <div class="panel-topline">
+                  <span class="terminal-label">SALDO TERCATAT</span>
+                  <span class="change-badge" id="month-change">BULAN INI</span>
+                </div>
+                <output class="balance-value money" id="total-balance">Rp0</output>
+                <p class="balance-note" id="balance-note">Tambahkan transaksi pertama untuk mulai membaca arus uang.</p>
+                <div class="wallet-chips" id="wallet-chips"></div>
+              </div>
+              <div class="balance-art" aria-hidden="true">
+                <div class="art-card"><span>FIN</span><strong>SPACE</strong></div>
+                <div class="art-coin coin-a">Rp</div>
+                <div class="art-coin coin-b">Rp</div>
+                <div class="art-lines"></div>
+              </div>
+            </article>
+
+            <button class="capture-banner brutal-panel" data-open-capture type="button">
+              <span>
+                <small>CATAT CEPAT</small>
+                <strong>Apa yang baru saja kamu bayar?</strong>
+              </span>
+              <span class="capture-arrow" aria-hidden="true">↗</span>
+            </button>
+
+            <section class="metric-grid" aria-label="Ringkasan bulan ini">
+              <article class="metric-card metric-income">
+                <span>PEMASUKAN</span>
+                <output class="money" id="metric-income">Rp0</output>
+                <small>Bulan berjalan</small>
+              </article>
+              <article class="metric-card metric-expense">
+                <span>PENGELUARAN</span>
+                <output class="money" id="metric-expense">Rp0</output>
+                <small>Bulan berjalan</small>
+              </article>
+              <article class="metric-card metric-surplus">
+                <span>SURPLUS</span>
+                <output class="money" id="metric-surplus">Rp0</output>
+                <small>Pemasukan dikurangi pengeluaran</small>
+              </article>
+              <article class="metric-card metric-budget">
+                <span>SISA ANGGARAN</span>
+                <output class="money" id="metric-budget">Belum diatur</output>
+                <small id="budget-caption">Atur batas per kategori</small>
+              </article>
+            </section>
+
+            <section class="dashboard-grid">
+              <article class="brutal-panel chart-panel">
+                <div class="section-heading">
+                  <div>
+                    <span class="terminal-label">7 HARI TERAKHIR</span>
+                    <h2>Ke mana uangmu pergi?</h2>
+                  </div>
+                  <output id="weekly-total" class="section-value money">Rp0</output>
+                </div>
+                <div class="bar-chart" id="weekly-chart" aria-label="Grafik pengeluaran tujuh hari terakhir"></div>
+              </article>
+
+              <article class="brutal-panel category-panel">
+                <div class="section-heading">
+                  <div>
+                    <span class="terminal-label">BULAN INI</span>
+                    <h2>Per kategori</h2>
+                  </div>
+                </div>
+                <div id="category-breakdown" class="category-list"></div>
+              </article>
+            </section>
+
+            <section class="dashboard-grid lower-grid">
+              <article class="insight-panel">
+                <span class="terminal-label terminal-label-dark">CATATAN SISTEM</span>
+                <h2 id="insight-title">Mulai dari satu transaksi.</h2>
+                <p id="insight-copy">FinSpace akan merangkum pola pengeluaran setelah datamu cukup.</p>
+                <button class="button button-lime" data-open-capture type="button">Catat sekarang <span aria-hidden="true">↗</span></button>
+              </article>
+
+              <article class="brutal-panel recent-panel">
+                <div class="section-heading">
+                  <div>
+                    <span class="terminal-label">AKTIVITAS</span>
+                    <h2>Transaksi terbaru</h2>
+                  </div>
+                  <button class="text-button" data-view-link="history" type="button">Lihat semua</button>
+                </div>
+                <div id="recent-transactions" class="transaction-list"></div>
+              </article>
+            </section>
+          </section>
+
+          <section class="view" id="view-history" data-view-panel="history" aria-labelledby="history-title">
+            <div class="page-intro">
+              <span class="terminal-label">LEDGER PRIBADI</span>
+              <h2 id="history-title">Riwayat transaksi</h2>
+              <p>Cari, periksa, ubah, atau hapus catatan. Saldo akan dihitung ulang otomatis.</p>
+            </div>
+            <div class="filter-row brutal-panel">
+              <label class="search-field">
+                <span class="sr-only">Cari transaksi</span>
+                <input id="history-search" type="search" placeholder="Cari catatan atau kategori" autocomplete="off" />
+              </label>
+              <label>
+                <span class="sr-only">Filter jenis</span>
+                <select id="history-filter">
+                  <option value="all">Semua jenis</option>
+                  <option value="expense">Pengeluaran</option>
+                  <option value="income">Pemasukan</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+            </div>
+            <article class="brutal-panel ledger-panel">
+              <div id="history-list" class="transaction-list transaction-list-large"></div>
+            </article>
+          </section>
+
+          <section class="view" id="view-wallets" data-view-panel="wallets" aria-labelledby="wallets-title">
+            <div class="page-intro intro-with-action">
+              <div>
+                <span class="terminal-label">SUMBER DANA</span>
+                <h2 id="wallets-title">Dompet saya</h2>
+                <p>Saldo dihitung dari saldo awal dan semua transaksi yang tercatat.</p>
+              </div>
+              <button class="button button-primary" id="add-wallet-button" type="button">＋ Tambah dompet</button>
+            </div>
+            <div class="wallet-grid" id="wallet-grid"></div>
+          </section>
+
+          <section class="view" id="view-budgets" data-view-panel="budgets" aria-labelledby="budgets-title">
+            <div class="page-intro intro-with-action">
+              <div>
+                <span class="terminal-label">BATAS BULANAN</span>
+                <h2 id="budgets-title">Anggaran kategori</h2>
+                <p>Tetapkan batas. Pengeluaran tetap bisa dicatat ketika anggaran terlampaui.</p>
+              </div>
+              <button class="button button-primary" id="add-budget-button" type="button">＋ Atur anggaran</button>
+            </div>
+            <div class="budget-grid" id="budget-grid"></div>
+          </section>
+
+          <section class="view" id="view-settings" data-view-panel="settings" aria-labelledby="settings-title">
+            <div class="page-intro">
+              <span class="terminal-label">KONTROL DATA</span>
+              <h2 id="settings-title">Pengaturan</h2>
+              <p>Data keuangan tersimpan di browser ini. Backup rutin agar mudah dipulihkan.</p>
+            </div>
+            <div class="more-menu" aria-label="Menu pengelolaan">
+              <button class="button button-primary" data-view-link="budgets" type="button">Kelola anggaran</button>
+              <button class="button button-secondary" data-view-link="wallets" type="button">Kelola dompet</button>
+              <button class="button button-secondary" data-view-link="history" type="button">Buka riwayat</button>
+            </div>
+            <div class="settings-grid">
+              <article class="brutal-panel setting-panel">
+                <span class="setting-index">01</span>
+                <h3>Identitas</h3>
+                <label class="field">
+                  <span>Nama panggilan</span>
+                  <input id="display-name" type="text" maxlength="40" placeholder="Nama kamu" />
+                </label>
+                <button class="button button-dark" id="save-profile" type="button">Simpan nama</button>
+              </article>
+              <article class="brutal-panel setting-panel">
+                <span class="setting-index">02</span>
+                <h3>Gemini</h3>
+                <p>AI hanya membuat draf. Transaksi baru masuk setelah kamu menekan Konfirmasi & Simpan.</p>
+                <label class="switch-row">
+                  <span>Aktifkan input AI</span>
+                  <input id="ai-enabled" type="checkbox" checked />
+                </label>
+              </article>
+              <article class="brutal-panel setting-panel">
+                <span class="setting-index">03</span>
+                <h3>Backup data</h3>
+                <p>Unduh semua dompet, transaksi, anggaran, dan preferensi sebagai JSON.</p>
+                <div class="button-stack">
+                  <button class="button button-dark" id="export-json" type="button">Unduh backup JSON</button>
+                  <button class="button button-secondary" id="export-csv" type="button">Ekspor CSV</button>
+                  <label class="button button-secondary file-button">Pulihkan backup<input id="import-json" type="file" accept="application/json" /></label>
+                </div>
+              </article>
+              <article class="brutal-panel setting-panel danger-panel">
+                <span class="setting-index">04</span>
+                <h3>Zona berbahaya</h3>
+                <p>Reset menghapus seluruh data FinSpace pada browser ini.</p>
+                <button class="button button-danger" id="reset-data" type="button">Reset semua data</button>
+              </article>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Navigasi bawah" data-nav>
+      <button class="mobile-nav-item active" data-view="dashboard" type="button"><span>⌂</span>Beranda</button>
+      <button class="mobile-nav-item" data-view="history" type="button"><span>≡</span>Riwayat</button>
+      <button class="mobile-capture" data-open-capture type="button" aria-label="Catat transaksi">＋</button>
+      <button class="mobile-nav-item" data-view="wallets" type="button"><span>▣</span>Dompet</button>
+      <button class="mobile-nav-item" data-view="settings" type="button"><span>···</span>Lainnya</button>
+    </nav>
+
+    <dialog class="sheet-dialog" id="capture-dialog" aria-labelledby="capture-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <section class="sheet">
+        <div class="sheet-grabber" aria-hidden="true"></div>
+        <header class="sheet-header">
+          <div>
+            <span class="terminal-label">INPUT BARU</span>
+            <h2 id="capture-title">Catat transaksi</h2>
+          </div>
+          <button class="icon-button dialog-close" type="button" aria-label="Tutup">×</button>
+        </header>
+
+        <div class="mode-tabs" role="tablist" aria-label="Mode input">
+          <button class="mode-tab active" id="manual-tab" role="tab" aria-selected="true" aria-controls="manual-panel" type="button">Manual</button>
+          <button class="mode-tab" id="ai-tab" role="tab" aria-selected="false" aria-controls="ai-panel" type="button">Dengan AI</button>
+        </div>
+
+        <div id="manual-panel" role="tabpanel" aria-labelledby="manual-tab">
+          <form id="transaction-form" novalidate>
+            <input type="hidden" id="transaction-id" />
+            <fieldset class="type-selector">
+              <legend class="sr-only">Jenis transaksi</legend>
+              <label><input type="radio" name="type" value="expense" checked /><span>Pengeluaran</span></label>
+              <label><input type="radio" name="type" value="income" /><span>Pemasukan</span></label>
+              <label><input type="radio" name="type" value="transfer" /><span>Transfer</span></label>
+            </fieldset>
+            <label class="amount-field">
+              <span>Nominal</span>
+              <div><b>Rp</b><input id="amount" inputmode="numeric" autocomplete="off" placeholder="0" required /></div>
+              <small class="field-error" id="amount-error"></small>
+            </label>
+            <div class="form-grid">
+              <label class="field">
+                <span>Dompet</span>
+                <select id="wallet-select" required></select>
+              </label>
+              <label class="field" id="destination-field" hidden>
+                <span>Ke dompet</span>
+                <select id="destination-wallet-select"></select>
+              </label>
+              <label class="field" id="category-field">
+                <span>Kategori</span>
+                <select id="category-select" required></select>
+              </label>
+              <label class="field">
+                <span>Tanggal</span>
+                <input id="transaction-date" type="date" required />
+              </label>
+            </div>
+            <label class="field">
+              <span>Catatan <small>opsional</small></span>
+              <input id="transaction-note" type="text" maxlength="500" placeholder="Contoh: Kopi pagi" />
+            </label>
+            <p class="form-message" id="transaction-message" role="alert"></p>
+            <button class="button button-primary button-full" id="save-transaction" type="submit">Simpan transaksi</button>
+          </form>
+        </div>
+
+        <div id="ai-panel" role="tabpanel" aria-labelledby="ai-tab" hidden>
+          <div class="ai-compose">
+            <label for="ai-input">Ceritakan transaksimu</label>
+            <textarea id="ai-input" rows="3" maxlength="1000" placeholder="Contoh: tadi beli kopi 20rb pakai GoPay"></textarea>
+            <button class="button button-dark button-full" id="parse-ai" type="button">Ubah jadi draf <span aria-hidden="true">↗</span></button>
+            <p class="privacy-copy">Teks diproses melalui endpoint Gemini jika dikonfigurasi. Nominal baru tersimpan setelah dikonfirmasi.</p>
+          </div>
+          <div class="ai-preview" id="ai-preview" hidden>
+            <div class="ai-preview-head">
+              <span class="terminal-label">DRAF SIAP DIPERIKSA</span>
+              <span id="ai-source">GEMINI</span>
+            </div>
+            <dl id="ai-preview-data"></dl>
+            <p class="form-message" id="ai-message" role="alert"></p>
+            <div class="dialog-actions">
+              <button class="button button-secondary" id="edit-ai-draft" type="button">Edit detail</button>
+              <button class="button button-primary" id="confirm-ai-draft" type="button">Konfirmasi & Simpan</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog class="compact-dialog" id="wallet-dialog" aria-labelledby="wallet-dialog-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <form class="compact-card" id="wallet-form">
+        <header class="sheet-header">
+          <div><span class="terminal-label">DOMPET BARU</span><h2 id="wallet-dialog-title">Tambah sumber dana</h2></div>
+          <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
+        </header>
+        <label class="field"><span>Nama dompet</span><input id="wallet-name" maxlength="30" required placeholder="Contoh: BCA" /></label>
+        <label class="field"><span>Jenis</span><select id="wallet-type"><option value="bank">Bank</option><option value="ewallet">E-wallet</option><option value="cash">Tunai</option><option value="savings">Tabungan</option></select></label>
+        <label class="field"><span>Saldo awal</span><input id="wallet-opening-balance" inputmode="numeric" placeholder="0" /></label>
+        <button class="button button-primary button-full" type="submit">Simpan dompet</button>
+      </form>
+    </dialog>
+
+    <dialog class="compact-dialog" id="budget-dialog" aria-labelledby="budget-dialog-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <form class="compact-card" id="budget-form">
+        <header class="sheet-header">
+          <div><span class="terminal-label">BATAS BULANAN</span><h2 id="budget-dialog-title">Atur anggaran</h2></div>
+          <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
+        </header>
+        <label class="field"><span>Kategori</span><select id="budget-category"></select></label>
+        <label class="field"><span>Batas per bulan</span><input id="budget-limit" inputmode="numeric" required placeholder="500.000" /></label>
+        <button class="button button-primary button-full" type="submit">Simpan anggaran</button>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script defer src="./app.js"></script>
+  </body>
+</html>
