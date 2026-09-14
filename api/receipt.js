@@ -1,4 +1,5 @@
 const MODEL = process.env.GEMINI_MODEL === 'gemini-2.5-flash' ? 'gemini-3.6-flash' : (process.env.GEMINI_MODEL || 'gemini-3.6-flash');
+export const maxDuration = 60;
 const requestsByClient = new Map();
 
 function send(response, status, body) {
@@ -55,7 +56,7 @@ export default async function handler(request, response) {
   };
   const prompt = `Baca foto struk ini dan buat SATU draf pengeluaran pribadi Indonesia. Ambil total akhir, bukan subtotal atau pajak. Jika tanggal tidak terbaca gunakan ${body.today}. Pilih wallet_id dari daftar tersedia dan kategori dari daftar yang diizinkan. Jangan mengarang nominal: jika total tidak terbaca, amount_idr harus "0". Gunakan nama toko dan ringkasan item sebagai note. Dompet: ${JSON.stringify(body.wallets)}. Kategori: ${JSON.stringify(categories.expense || [])}.`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
       method: 'POST',

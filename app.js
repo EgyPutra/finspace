@@ -941,18 +941,18 @@ function compressReceipt(file) {
     image.onload = async () => {
       URL.revokeObjectURL(objectUrl);
       const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-      const scale = Math.min(1, 1800 / longestSide);
+      const scale = Math.min(1, 1280 / longestSide);
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
       canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
       canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
       const encode = (quality) => new Promise((done) => canvas.toBlob(done, 'image/jpeg', quality));
-      let blob = await encode(0.82);
-      if (blob && blob.size > 2_800_000) {
+      let blob = await encode(0.76);
+      if (blob && blob.size > 1_200_000) {
         canvas.width = Math.max(1, Math.round(canvas.width * 0.72));
         canvas.height = Math.max(1, Math.round(canvas.height * 0.72));
         canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-        blob = await encode(0.72);
+        blob = await encode(0.68);
       }
       if (blob) resolve(blob); else reject(new Error('Foto struk tidak dapat diproses.'));
     };
@@ -991,7 +991,9 @@ async function parseReceipt() {
     renderAIPreview({ ...normalized, source: 'FOTO STRUK' });
     $('#ai-message').textContent = 'Draf dibuat dari foto struk. Periksa sebelum menyimpan.';
   } catch (error) {
-    $('#receipt-message').textContent = error.message || 'Struk tidak dapat dianalisis.';
+    $('#receipt-message').textContent = error.message === 'Failed to fetch' || error.message === 'Load failed'
+      ? 'Koneksi ke server analisis terputus. Coba lagi dengan jaringan stabil.'
+      : (error.message || 'Struk tidak dapat dianalisis.');
   } finally {
     button.disabled = false;
     button.innerHTML = 'Analisis struk <span aria-hidden="true">↗</span>';
