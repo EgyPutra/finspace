@@ -282,6 +282,8 @@ main { width: min(100%, 1320px); margin: 0 auto; padding: 32px clamp(20px, 4vw, 
 .file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 dialog { border: 0; padding: 0; background: transparent; color: var(--ink); width: 100%; max-width: none; height: 100%; max-height: none; overflow: visible; }
+dialog:not([open]) { display: none !important; visibility: hidden; pointer-events: none; }
+dialog[open] { display: block; }
 dialog::backdrop { background: rgba(5, 5, 5, .56); }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 0; }
 .dialog-backdrop button { width: 100%; height: 100%; border: 0; background: transparent; }
@@ -324,7 +326,8 @@ dialog::backdrop { background: rgba(5, 5, 5, .56); }
 .ai-preview dd { margin: 6px 0 0; font-weight: 800; font-size: 13px; }
 .dialog-actions { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
 
-.compact-dialog { display: grid; place-items: center; padding: 20px; }
+.compact-dialog { place-items: center; padding: 20px; }
+.compact-dialog[open] { display: grid; }
 .compact-card { position: relative; z-index: 1; width: min(460px, 100%); max-height: calc(100dvh - 40px); overflow: auto; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 8px 8px 0 var(--lime); padding: 22px; }
 .confirm-card h2 { margin: 18px 0 8px; font: 800 30px/1 'Space Grotesk', sans-serif; letter-spacing: -.045em; }
 .confirm-card p { margin: 0 0 24px; color: #5f5a5a; line-height: 1.55; }
@@ -471,7 +474,7 @@ html[data-theme="dark"] textarea { color-scheme: dark; }
   .type-selector span { font-size: 10px; }
   .ai-preview dl { grid-template-columns: 1fr 1fr; }
   .dialog-actions { grid-template-columns: 1fr; }
-  .compact-dialog { align-items: end; padding: 0; }
+  .compact-dialog[open] { align-items: end; padding: 0; }
   .compact-card { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; border-bottom: 0; box-shadow: 0 -7px 0 var(--lime); padding-bottom: calc(22px + var(--safe-bottom)); }
   .toast-region { right: 12px; bottom: calc(82px + var(--safe-bottom)); }
 }
