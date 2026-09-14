@@ -21,6 +21,23 @@ function isRateLimited(request) {
   return recent.length > 10;
 }
 
+function parseGeminiJson(text) {
+  const source = String(text || '').trim();
+  if (!source) throw new Error('Respons Gemini kosong.');
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    const withoutFence = source.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    try {
+      return JSON.parse(withoutFence);
+    } catch (nestedError) {
+      const object = withoutFence.match(/\{[\s\S]*\}/)?.[0];
+      if (!object) throw new Error('Format respons Gemini tidak dikenali.');
+      return JSON.parse(object);
+    }
+  }
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') return send(response, 405, { error: 'Method tidak didukung.' });
   if (!process.env.GEMINI_API_KEY) return send(response, 503, { error: 'Gemini belum dikonfigurasi.' });
@@ -70,12 +87,20 @@ export default async function handler(request, response) {
     if (!geminiResponse.ok) return send(response, 502, await geminiFailure(geminiResponse, 'Gemini tidak dapat membaca struk.'));
     const payload = await geminiResponse.json();
     const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsed = JSON.parse(text || '{}');
+    const parsed = parseGeminiJson(text);
     const draft = parsed.draft || {};
-    if (!walletIds.includes(draft.wallet_id) || !/^\d+$/.test(draft.amount_idr || '')) return send(response, 422, { error: 'Hasil pembacaan struk tidak valid.' });
-    return send(response, 200, { draft: { type: 'expense', amount: draft.amount_idr, walletId: draft.wallet_id, category: draft.category, date: draft.transaction_date, note: draft.note } });
+    const amount = String(draft.amount_idr ?? '').replace(/[^0-9]/g, '');
+    const walletId = walletIds.includes(draft.wallet_id) ? draft.wallet_id : walletIds[0];
+    const allowedCategories = Array.isArray(categories.expense) ? categories.expense : [];
+    const category = allowedCategories.includes(draft.category) ? draft.category : (allowedCategories.at(-1) || 'Lainnya');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(draft.transaction_date || '') ? draft.transaction_date : body.today;
+    if (!amount) return send(response, 422, { error: 'Gemini belum menemukan total pembayaran pada struk. Pastikan bagian TOTAL atau BAYAR terlihat jelas.' });
+    return send(response, 200, { draft: { type: 'expense', amount, walletId, category, date, note: String(draft.note || 'Belanja dari struk').slice(0, 500) } });
   } catch (error) {
-    return send(response, error.name === 'AbortError' ? 504 : 502, { error: error.name === 'AbortError' ? 'Analisis struk melewati batas waktu.' : 'Struk tidak dapat dianalisis.' });
+    const message = String(error.message || '').replace(/AIza[\w-]+/g, '[redacted]').slice(0, 160);
+    return send(response, error.name === 'AbortError' ? 504 : 502, {
+      error: error.name === 'AbortError' ? 'Analisis struk melewati batas waktu.' : `Struk tidak dapat dianalisis (${message || 'respons server tidak valid'}).`,
+    });
   } finally {
     clearTimeout(timeout);
   }
