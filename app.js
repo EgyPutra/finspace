@@ -1,6 +1,6 @@
 const DB_NAME = 'finspace-db-v2';
-const DB_VERSION = 1;
-const STORES = ['wallets', 'transactions', 'budgets', 'settings'];
+const DB_VERSION = 2;
+const STORES = ['wallets', 'transactions', 'budgets', 'goals', 'settings'];
 
 const CATEGORIES = {
   expense: ['Makan & Minum', 'Transportasi', 'Belanja', 'Tagihan', 'Hiburan', 'Kesehatan', 'Pendidikan', 'Lainnya'],
@@ -11,9 +11,13 @@ const state = {
   wallets: [],
   transactions: [],
   budgets: [],
+  goals: [],
   settings: { id: 'profile', name: '', aiEnabled: true, hideMoney: false, theme: 'system' },
   currentView: 'dashboard',
   aiDraft: null,
+  receiptImage: null,
+  freshInstall: false,
+  sync: { client: null, user: null, available: false, syncing: false, subscription: null },
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -112,6 +116,7 @@ async function dbReplaceAll(backup) {
   for (const wallet of backup.wallets) tx.objectStore('wallets').put(wallet);
   for (const transaction of backup.transactions) tx.objectStore('transactions').put(transaction);
   for (const budget of backup.budgets) tx.objectStore('budgets').put(budget);
+  for (const goal of backup.goals || []) tx.objectStore('goals').put(goal);
   tx.objectStore('settings').put(backup.settings);
   return new Promise((resolve, reject) => {
     tx.oncomplete = resolve;
@@ -122,6 +127,7 @@ async function dbReplaceAll(backup) {
 
 async function seedData() {
   const wallets = await dbReadAll('wallets');
+  state.freshInstall = !wallets.length;
   if (!wallets.length) {
     await dbPut('wallets', { id: uid(), name: 'Tunai', type: 'cash', openingBalance: 0, createdAt: new Date().toISOString() });
     await dbPut('wallets', { id: uid(), name: 'Rekening utama', type: 'bank', openingBalance: 0, createdAt: new Date().toISOString() });
@@ -132,10 +138,11 @@ async function seedData() {
 
 async function loadState() {
   await seedData();
-  const [wallets, transactions, budgets, settings] = await Promise.all(STORES.map(dbReadAll));
+  const [wallets, transactions, budgets, goals, settings] = await Promise.all(STORES.map(dbReadAll));
   state.wallets = wallets.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   state.transactions = transactions.sort(sortTransactions);
   state.budgets = budgets;
+  state.goals = goals.sort((a, b) => String(a.targetDate).localeCompare(String(b.targetDate)));
   state.settings = { ...state.settings, ...(settings.find((item) => item.id === 'profile') || {}) };
 }
 
@@ -213,7 +220,7 @@ function setView(view) {
     button.classList.toggle('active', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  const titles = { dashboard: 'Beranda', history: 'Riwayat', wallets: 'Dompet', budgets: 'Anggaran', settings: 'Pengaturan' };
+  const titles = { dashboard: 'Beranda', history: 'Riwayat', wallets: 'Dompet', budgets: 'Anggaran', goals: 'Goals', settings: 'Pengaturan' };
   $('#page-title').textContent = titles[view] || 'FinSpace';
   history.replaceState(null, '', `#${view}`);
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -228,6 +235,7 @@ function renderAll() {
   renderHistory();
   renderWallets();
   renderBudgets();
+  renderGoals();
   renderSettings();
   applyPrivacyMode();
 }
@@ -269,6 +277,43 @@ function renderDashboard() {
   renderCategoryBreakdown();
   renderTransactionList($('#recent-transactions'), state.transactions.slice(0, 5), false);
   renderInsight(summary);
+  renderFinancialHealth(total, summary, activeBudgets);
+}
+
+function clamp(value, min = 0, max = 100) { return Math.min(max, Math.max(min, value)); }
+
+function renderFinancialHealth(totalBalance, summary, budgets) {
+  const monthCount = state.transactions.filter((item) => item.date.startsWith(monthKey())).length;
+  if (!summary.income && !summary.expense) {
+    $('#health-score').textContent = '0';
+    $('#health-title').textContent = 'Mulai ukur kebiasaanmu.';
+    $('#health-summary').textContent = 'Catat transaksi untuk membangun skor yang lebih akurat.';
+    $('#health-factors').innerHTML = '<span>Butuh data transaksi</span>';
+    return;
+  }
+  const surplus = summary.income - summary.expense;
+  const cashflow = summary.income ? (summary.expense <= summary.income ? 30 : 0) : 0;
+  const savingsRate = summary.income ? clamp(surplus / summary.income / 0.2, 0, 1) * 25 : 0;
+  const budgetScore = budgets.length ? budgets.reduce((total, budget) => {
+    const used = monthTransactions().filter((item) => item.type === 'expense' && item.category === budget.category).reduce((sum, item) => sum + item.amount, 0);
+    return total + (used <= budget.limit ? 1 : clamp(1 - ((used - budget.limit) / budget.limit), 0, 1));
+  }, 0) / budgets.length * 20 : 10;
+  const emergencyScore = summary.expense ? clamp(totalBalance / (summary.expense * 3), 0, 1) * 15 : 15;
+  const consistency = clamp(monthCount / 12, 0, 1) * 10;
+  const score = Math.round(cashflow + savingsRate + budgetScore + emergencyScore + consistency);
+  const label = score >= 80 ? 'Sangat sehat.' : score >= 60 ? 'Keuanganmu sehat.' : score >= 40 ? 'Mulai stabil.' : 'Perlu perhatian.';
+  const opportunity = summary.income && surplus < summary.income * .2 ? 'Naikkan surplus menuju 20% pemasukan.' : budgets.some((budget) => monthTransactions().filter((item) => item.type === 'expense' && item.category === budget.category).reduce((sum, item) => sum + item.amount, 0) > budget.limit) ? 'Ada anggaran yang terlewati bulan ini.' : 'Pertahankan kebiasaan pencatatanmu.';
+  $('#health-score').textContent = String(score);
+  $('#health-score-orb').style.setProperty('--score', `${score}%`);
+  $('#health-title').textContent = label;
+  $('#health-summary').textContent = opportunity;
+  $('#health-factors').innerHTML = [
+    `Arus kas ${Math.round(cashflow)}/30`,
+    `Menabung ${Math.round(savingsRate)}/25`,
+    `Anggaran ${Math.round(budgetScore)}/20`,
+    `Dana aman ${Math.round(emergencyScore)}/15`,
+    `Konsistensi ${Math.round(consistency)}/10`,
+  ].map((item) => `<span>${escapeHTML(item)}</span>`).join('');
 }
 
 function renderWeeklyChart() {
@@ -375,11 +420,43 @@ function renderBudgets() {
   }).join('') : emptyState('Belum ada anggaran', 'Tetapkan batas bulanan untuk kategori yang ingin kamu kendalikan.', '<button class="button button-primary" type="button" data-add-budget>Atur anggaran</button>');
 }
 
+function goalMonthlyNeed(goal) {
+  const remaining = Math.max(0, Number(goal.targetAmount) - Number(goal.currentAmount || 0));
+  const today = new Date(`${todayISO()}T12:00:00`);
+  const target = new Date(`${goal.targetDate}T12:00:00`);
+  const months = Math.max(1, Math.ceil((target - today) / (1000 * 60 * 60 * 24 * 30.44)));
+  return { remaining, months, monthly: Math.ceil(remaining / months) };
+}
+
+function renderGoals() {
+  const container = $('#goal-grid');
+  if (!state.goals.length) {
+    container.innerHTML = emptyState('Belum ada goal', 'Mulai dari tujuan sederhana agar progresmu mudah terlihat.', '<button class="button button-primary" type="button" data-add-goal>Buat goal</button>');
+    return;
+  }
+  container.innerHTML = state.goals.map((goal) => {
+    const target = Number(goal.targetAmount) || 1;
+    const current = Number(goal.currentAmount) || 0;
+    const percent = clamp(Math.round(current / target * 100));
+    const plan = goalMonthlyNeed(goal);
+    const complete = current >= target;
+    return `<article class="goal-card brutal-panel">
+      <div class="wallet-card-top"><span class="wallet-type">${complete ? 'Tercapai' : `Target ${dateLabel(goal.targetDate)}`}</span><div class="card-actions"><button type="button" data-edit-goal="${escapeHTML(goal.id)}">Ubah</button><button type="button" data-delete-goal="${escapeHTML(goal.id)}">Hapus</button></div></div>
+      <h3>${escapeHTML(goal.name)}</h3>
+      <output class="money">${money(current)}</output><small>dari ${money(target)}</small>
+      <div class="goal-track" aria-label="${percent}% tercapai"><span style="width:${Math.max(2, percent)}%"></span></div>
+      <div class="goal-meta"><span>${percent}% tercapai</span><span>${complete ? 'Selesai' : `${money(plan.monthly)}/bulan`}</span></div>
+      <button class="button button-secondary button-full" type="button" data-update-goal="${escapeHTML(goal.id)}">${complete ? 'Ubah progres' : 'Update progres'}</button>
+    </article>`;
+  }).join('');
+}
+
 function renderSettings() {
   $('#display-name').value = state.settings.name || '';
   $('#ai-enabled').checked = state.settings.aiEnabled !== false;
   $('#ai-tab').disabled = state.settings.aiEnabled === false;
   $('#theme-select').value = ['system', 'light', 'dark'].includes(state.settings.theme) ? state.settings.theme : 'system';
+  renderAccountState();
 }
 
 function renderWalletOptions() {
@@ -437,8 +514,14 @@ function resetTransactionForm() {
   $('#transaction-message').textContent = '';
   $('#amount-error').textContent = '';
   state.aiDraft = null;
+  state.receiptImage = null;
   $('#ai-preview').hidden = true;
   $('#ai-input').value = '';
+  $('#receipt-file').value = '';
+  $('#receipt-preview-image').hidden = true;
+  $('#receipt-preview-image').removeAttribute('src');
+  $('#receipt-message').textContent = '';
+  $('#parse-receipt').disabled = true;
   renderCategoryOptions();
   $('#save-transaction').textContent = 'Simpan transaksi';
 }
@@ -457,12 +540,16 @@ function fillTransactionForm(transaction) {
 
 function switchCaptureMode(mode) {
   const ai = mode === 'ai';
-  $('#manual-tab').classList.toggle('active', !ai);
-  $('#manual-tab').setAttribute('aria-selected', String(!ai));
+  const receipt = mode === 'receipt';
+  $('#manual-tab').classList.toggle('active', !ai && !receipt);
+  $('#manual-tab').setAttribute('aria-selected', String(!ai && !receipt));
   $('#ai-tab').classList.toggle('active', ai);
   $('#ai-tab').setAttribute('aria-selected', String(ai));
-  $('#manual-panel').hidden = ai;
+  $('#receipt-tab').classList.toggle('active', receipt);
+  $('#receipt-tab').setAttribute('aria-selected', String(receipt));
+  $('#manual-panel').hidden = ai || receipt;
   $('#ai-panel').hidden = !ai;
+  $('#receipt-panel').hidden = !receipt;
   if (ai) window.setTimeout(() => $('#ai-input').focus(), 80);
 }
 
@@ -503,6 +590,7 @@ async function saveTransactionFromForm(event) {
     state.transactions.sort(sortTransactions);
     closeCapture();
     renderAll();
+    scheduleCloudSync();
     showToast(existing ? 'Perubahan transaksi tersimpan.' : 'Transaksi tersimpan di perangkat.');
   } catch (error) {
     $('#transaction-message').textContent = 'Penyimpanan gagal. Data pada formulir tetap aman, silakan coba lagi.';
@@ -523,6 +611,7 @@ async function deleteTransaction(id) {
   await dbDelete('transactions', id);
   state.transactions = state.transactions.filter((item) => item.id !== id);
   renderAll();
+  scheduleCloudSync();
   showToast('Transaksi dihapus.');
 }
 
@@ -571,6 +660,7 @@ async function saveWallet(event) {
     if (index >= 0) state.wallets[index] = wallet; else state.wallets.push(wallet);
     $('#wallet-dialog').close();
     renderAll();
+    scheduleCloudSync();
     showToast(existing ? 'Perubahan dompet disimpan.' : 'Dompet baru ditambahkan.');
   } catch (error) {
     $('#wallet-message').textContent = 'Dompet belum tersimpan. Coba lagi.';
@@ -595,6 +685,7 @@ async function deleteWallet(id) {
   await dbDelete('wallets', id);
   state.wallets = state.wallets.filter((item) => item.id !== id);
   renderAll();
+  scheduleCloudSync();
   showToast('Dompet dihapus.');
 }
 
@@ -637,6 +728,7 @@ async function saveBudget(event) {
     state.budgets.push(budget);
     $('#budget-dialog').close();
     renderAll();
+    scheduleCloudSync();
     showToast(old ? 'Perubahan anggaran disimpan.' : 'Anggaran disimpan.');
   } catch (error) {
     $('#budget-message').textContent = 'Anggaran belum tersimpan. Coba lagi.';
@@ -651,7 +743,101 @@ async function deleteBudget(id) {
   await dbDelete('budgets', id);
   state.budgets = state.budgets.filter((item) => item.id !== id);
   renderAll();
+  scheduleCloudSync();
   showToast('Anggaran dihapus.');
+}
+
+function openGoalDialog(goal = null) {
+  $('#goal-form').reset();
+  $('#goal-id').value = goal?.id || '';
+  $('#goal-name').value = goal?.name || '';
+  $('#goal-target').value = goal?.targetAmount ? new Intl.NumberFormat('id-ID').format(goal.targetAmount) : '';
+  $('#goal-current').value = goal?.currentAmount ? new Intl.NumberFormat('id-ID').format(goal.currentAmount) : '';
+  $('#goal-date').value = goal?.targetDate || todayISO();
+  $('#goal-message').textContent = '';
+  $('#goal-dialog-label').textContent = goal ? 'EDIT GOAL' : 'GOAL BARU';
+  $('#goal-dialog-title').textContent = goal ? 'Ubah tujuan' : 'Buat tujuan';
+  $('#save-goal').textContent = goal ? 'Simpan perubahan' : 'Simpan goal';
+  $('#goal-dialog').showModal();
+  window.setTimeout(() => $('#goal-name').focus(), 50);
+}
+
+async function saveGoal(event) {
+  event.preventDefault();
+  const id = $('#goal-id').value;
+  const name = $('#goal-name').value.trim();
+  const targetAmount = amountValue($('#goal-target').value);
+  const currentAmount = amountValue($('#goal-current').value);
+  const targetDate = $('#goal-date').value;
+  const old = state.goals.find((item) => item.id === id);
+  $('#goal-message').textContent = '';
+  if (!name || !targetAmount || !targetDate) {
+    $('#goal-message').textContent = 'Nama, target nominal, dan tanggal wajib diisi.';
+    return;
+  }
+  if (currentAmount > targetAmount) {
+    $('#goal-message').textContent = 'Dana terkumpul tidak boleh melebihi target.';
+    return;
+  }
+  const goal = { id: id || uid(), name, targetAmount, currentAmount, targetDate, createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  $('#save-goal').disabled = true;
+  try {
+    await dbPut('goals', goal);
+    state.goals = state.goals.filter((item) => item.id !== goal.id);
+    state.goals.push(goal);
+    state.goals.sort((a, b) => a.targetDate.localeCompare(b.targetDate));
+    $('#goal-dialog').close();
+    renderAll();
+    scheduleCloudSync();
+    showToast(old ? 'Goal diperbarui.' : 'Goal baru dibuat.');
+  } catch (error) {
+    $('#goal-message').textContent = 'Goal belum tersimpan. Coba lagi.';
+  } finally {
+    $('#save-goal').disabled = false;
+  }
+}
+
+function openGoalProgressDialog(goal) {
+  if (!goal) return;
+  $('#goal-progress-form').reset();
+  $('#goal-progress-id').value = goal.id;
+  $('#goal-progress-name').textContent = `${goal.name} · ${money(goal.currentAmount)} dari ${money(goal.targetAmount)}`;
+  $('#goal-progress-message').textContent = '';
+  $('#goal-progress-dialog').showModal();
+  window.setTimeout(() => $('#goal-progress-amount').focus(), 50);
+}
+
+async function saveGoalProgress(event) {
+  event.preventDefault();
+  const goal = state.goals.find((item) => item.id === $('#goal-progress-id').value);
+  const amount = amountValue($('#goal-progress-amount').value);
+  const direction = $('#goal-progress-type').value;
+  if (!goal || !amount) {
+    $('#goal-progress-message').textContent = 'Masukkan nominal perubahan.';
+    return;
+  }
+  const next = direction === 'subtract' ? goal.currentAmount - amount : goal.currentAmount + amount;
+  if (next < 0 || next > goal.targetAmount) {
+    $('#goal-progress-message').textContent = next < 0 ? 'Dana goal tidak boleh kurang dari Rp0.' : 'Dana goal tidak boleh melebihi target.';
+    return;
+  }
+  const updated = { ...goal, currentAmount: next, updatedAt: new Date().toISOString() };
+  await dbPut('goals', updated);
+  state.goals = state.goals.map((item) => item.id === updated.id ? updated : item);
+  $('#goal-progress-dialog').close();
+  renderAll();
+  scheduleCloudSync();
+  showToast('Progres goal diperbarui.');
+}
+
+async function deleteGoal(id) {
+  const goal = state.goals.find((item) => item.id === id);
+  if (!goal || !await requestConfirmation({ title: 'Hapus goal?', message: `${goal.name} akan dihapus.`, confirmLabel: 'Hapus goal' })) return;
+  await dbDelete('goals', id);
+  state.goals = state.goals.filter((item) => item.id !== id);
+  renderAll();
+  scheduleCloudSync();
+  showToast('Goal dihapus.');
 }
 
 function localParse(text) {
@@ -724,6 +910,61 @@ async function parseWithAI() {
   renderAIPreview(normalized);
 }
 
+async function selectReceipt(file) {
+  $('#receipt-message').textContent = '';
+  state.receiptImage = null;
+  $('#parse-receipt').disabled = true;
+  if (!file) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 6_000_000) {
+    $('#receipt-message').textContent = 'Gunakan JPG, PNG, atau WebP dengan ukuran maksimal 6 MB.';
+    return;
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Foto tidak dapat dibaca.'));
+    reader.readAsDataURL(file);
+  });
+  state.receiptImage = { dataUrl, mimeType: file.type, name: file.name || `struk-${todayISO()}` };
+  $('#receipt-preview-image').src = dataUrl;
+  $('#receipt-preview-image').hidden = false;
+  $('#parse-receipt').disabled = false;
+}
+
+async function parseReceipt() {
+  if (!state.receiptImage) return;
+  const button = $('#parse-receipt');
+  $('#receipt-message').textContent = '';
+  button.disabled = true;
+  button.textContent = 'Membaca struk...';
+  try {
+    const response = await fetch('/api/receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: state.receiptImage.dataUrl.split(',')[1],
+        mimeType: state.receiptImage.mimeType,
+        today: todayISO(),
+        wallets: state.wallets.map(({ id, name }) => ({ id, name })),
+        categories: CATEGORIES,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Struk tidak dapat dianalisis.');
+    const normalized = normalizeAIDraft({ ...result, source: 'FOTO STRUK' });
+    if (!normalized.draft.amount) throw new Error('Nominal pada struk belum terbaca. Isi manual untuk melanjutkan.');
+    state.aiDraft = normalized.draft;
+    switchCaptureMode('ai');
+    renderAIPreview({ ...normalized, source: 'FOTO STRUK' });
+    $('#ai-message').textContent = 'Draf dibuat dari foto struk. Periksa sebelum menyimpan.';
+  } catch (error) {
+    $('#receipt-message').textContent = error.message || 'Struk tidak dapat dianalisis.';
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Analisis struk <span aria-hidden="true">↗</span>';
+  }
+}
+
 function normalizeAIDraft(result) {
   const draft = result.draft || result;
   const type = ['income', 'expense', 'transfer'].includes(draft.type) ? draft.type : 'expense';
@@ -772,14 +1013,16 @@ async function confirmAIDraft() {
     $('#transaction-message').textContent = 'Periksa dompet asal, dompet tujuan, dan nominal sebelum menyimpan.';
     return;
   }
-  const record = { id: uid(), ...draft, source: 'ai', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   $('#confirm-ai-draft').disabled = true;
   try {
+    const receiptPath = await saveReceiptToCloud();
+    const record = { id: uid(), ...draft, source: state.receiptImage ? 'receipt' : 'ai', receiptPath, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     await dbPut('transactions', record);
     state.transactions.push(record);
     state.transactions.sort(sortTransactions);
     closeCapture();
     renderAll();
+    scheduleCloudSync();
     showToast('Draf AI dikonfirmasi dan disimpan.');
   } catch (error) {
     $('#ai-message').textContent = 'Draf belum tersimpan. Coba lagi atau edit detail secara manual.';
@@ -798,7 +1041,7 @@ function downloadBlob(filename, content, type) {
 }
 
 function exportJSON() {
-  const backup = { schemaVersion: 1, exportedAt: new Date().toISOString(), app: 'FinSpace', wallets: state.wallets, transactions: state.transactions, budgets: state.budgets, settings: state.settings };
+  const backup = { schemaVersion: 2, exportedAt: new Date().toISOString(), app: 'FinSpace', wallets: state.wallets, transactions: state.transactions, budgets: state.budgets, goals: state.goals, settings: state.settings };
   downloadBlob(`finspace-backup-${todayISO()}.json`, JSON.stringify(backup, null, 2), 'application/json');
   showToast('Backup JSON diunduh.');
 }
@@ -820,11 +1063,12 @@ async function importJSON(file) {
   try {
     if (file.size > 5_000_000) throw new Error('Ukuran backup maksimal 5 MB.');
     const backup = validateBackup(JSON.parse(await file.text()));
-    const summary = `${backup.wallets.length} dompet, ${backup.transactions.length} transaksi, dan ${backup.budgets.length} anggaran`;
+    const summary = `${backup.wallets.length} dompet, ${backup.transactions.length} transaksi, ${backup.budgets.length} anggaran, dan ${(backup.goals || []).length} goal`;
     if (!await requestConfirmation({ title: 'Pulihkan backup?', message: `${summary} akan dipulihkan dan mengganti data saat ini.`, confirmLabel: 'Pulihkan data', danger: false })) return;
     await dbReplaceAll(backup);
     await loadState();
     renderAll();
+    scheduleCloudSync();
     showToast('Backup berhasil dipulihkan.');
   } catch (error) {
     showToast(error.message || 'Backup tidak dapat dipulihkan.', 'error');
@@ -834,7 +1078,7 @@ async function importJSON(file) {
 }
 
 function validateBackup(backup) {
-  if (!backup || backup.schemaVersion !== 1 || !Array.isArray(backup.wallets) || !Array.isArray(backup.transactions) || !Array.isArray(backup.budgets)) throw new Error('Format backup tidak dikenali.');
+  if (!backup || ![1, 2].includes(backup.schemaVersion) || !Array.isArray(backup.wallets) || !Array.isArray(backup.transactions) || !Array.isArray(backup.budgets)) throw new Error('Format backup tidak dikenali.');
   if (!backup.wallets.length || backup.wallets.length > 100 || backup.transactions.length > 50_000 || backup.budgets.length > 5_000) throw new Error('Jumlah data pada backup tidak valid.');
   const validId = (value) => typeof value === 'string' && /^[a-zA-Z0-9._:-]{1,100}$/.test(value);
   const validAmount = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 999_999_999_999;
@@ -862,6 +1106,13 @@ function validateBackup(backup) {
     if (!validId(budget.id) || budgetIds.has(budget.id) || !CATEGORIES.expense.includes(budget.category) || !validAmount(budget.limit) || Number(budget.limit) < 1 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(budget.month || '')) throw new Error('Ada data anggaran yang tidak valid.');
     budgetIds.add(budget.id);
   }
+  const goals = Array.isArray(backup.goals) ? backup.goals : [];
+  if (goals.length > 500) throw new Error('Jumlah goal pada backup tidak valid.');
+  const goalIds = new Set();
+  for (const goal of goals) {
+    if (!validId(goal.id) || goalIds.has(goal.id) || typeof goal.name !== 'string' || !goal.name.trim() || goal.name.length > 60 || !validAmount(goal.targetAmount) || Number(goal.targetAmount) < 1 || !validAmount(goal.currentAmount) || Number(goal.currentAmount) > Number(goal.targetAmount) || !validDate(goal.targetDate)) throw new Error('Ada data goal yang tidak valid.');
+    goalIds.add(goal.id);
+  }
   const settings = backup.settings && typeof backup.settings === 'object' ? backup.settings : {};
   backup.settings = {
     id: 'profile',
@@ -873,7 +1124,180 @@ function validateBackup(backup) {
   backup.wallets = backup.wallets.map((wallet) => ({ ...wallet, name: wallet.name.trim(), openingBalance: Number(wallet.openingBalance), createdAt: timestamp(wallet.createdAt), updatedAt: timestamp(wallet.updatedAt || wallet.createdAt) }));
   backup.transactions = backup.transactions.map((item) => ({ ...item, amount: Number(item.amount), note: String(item.note || ''), destinationWalletId: item.type === 'transfer' ? item.destinationWalletId : null, category: item.type === 'transfer' ? null : item.category, createdAt: timestamp(item.createdAt), updatedAt: timestamp(item.updatedAt || item.createdAt) }));
   backup.budgets = backup.budgets.map((budget) => ({ ...budget, limit: Number(budget.limit), createdAt: timestamp(budget.createdAt), updatedAt: timestamp(budget.updatedAt || budget.createdAt) }));
+  backup.goals = goals.map((goal) => ({ ...goal, name: goal.name.trim(), targetAmount: Number(goal.targetAmount), currentAmount: Number(goal.currentAmount), createdAt: timestamp(goal.createdAt), updatedAt: timestamp(goal.updatedAt || goal.createdAt) }));
   return backup;
+}
+
+function snapshotData() {
+  return {
+    schemaVersion: 2,
+    wallets: state.wallets,
+    transactions: state.transactions,
+    budgets: state.budgets,
+    goals: state.goals,
+    settings: state.settings,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function meaningfulLocalData() {
+  return state.transactions.length > 0 || state.budgets.length > 0 || state.goals.length > 0 || state.wallets.some((wallet) => !['Tunai', 'Rekening utama'].includes(wallet.name) || Number(wallet.openingBalance) !== 0);
+}
+
+function mergeRecords(local = [], remote = []) {
+  const records = new Map();
+  for (const item of [...remote, ...local]) {
+    const old = records.get(item.id);
+    const oldDate = Date.parse(old?.updatedAt || old?.createdAt || 0) || 0;
+    const newDate = Date.parse(item.updatedAt || item.createdAt || 0) || 0;
+    if (!old || newDate >= oldDate) records.set(item.id, item);
+  }
+  return [...records.values()];
+}
+
+async function applyCloudSnapshot(data, { merge = true } = {}) {
+  if (!data || !Array.isArray(data.wallets) || !Array.isArray(data.transactions)) return;
+  const remote = {
+    wallets: data.wallets || [],
+    transactions: data.transactions || [],
+    budgets: data.budgets || [],
+    goals: data.goals || [],
+    settings: { ...state.settings, ...(data.settings || {}), id: 'profile' },
+  };
+  const useRemote = !merge || state.freshInstall || !meaningfulLocalData();
+  const next = useRemote ? remote : {
+    wallets: mergeRecords(state.wallets, remote.wallets),
+    transactions: mergeRecords(state.transactions, remote.transactions),
+    budgets: mergeRecords(state.budgets, remote.budgets),
+    goals: mergeRecords(state.goals, remote.goals),
+    settings: remote.settings,
+  };
+  if (!next.wallets.length) return;
+  await dbReplaceAll(next);
+  await loadState();
+  renderAll();
+}
+
+function setSyncStatus(message, type = '') {
+  const status = $('#account-state');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `account-state ${type}`;
+}
+
+function renderAccountState() {
+  const ready = state.sync.available;
+  const user = state.sync.user;
+  $('#connect-account').hidden = Boolean(user);
+  $('#sync-now').hidden = !user;
+  $('#sign-out').hidden = !user;
+  if (user) {
+    setSyncStatus(`Tersambung: ${user.email}`, 'connected');
+    $('#sync-description').textContent = 'Data akan disinkronkan ke akun ini saat online dan tersedia di perangkat lain yang memakai email sama.';
+  } else if (ready) {
+    setSyncStatus('Belum terhubung', '');
+    $('#sync-description').textContent = 'Masuk dengan email yang sama di laptop dan HP untuk menyinkronkan data secara aman.';
+  } else {
+    setSyncStatus('Mode lokal · sinkronisasi belum dikonfigurasi', '');
+    $('#sync-description').textContent = 'Tambahkan konfigurasi Supabase di Vercel untuk mengaktifkan sinkronisasi antar perangkat.';
+  }
+}
+
+async function initCloudSync() {
+  try {
+    const response = await fetch('/api/supabase-config');
+    if (!response.ok) return;
+    const config = await response.json();
+    if (!config.url || !config.anonKey) return;
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    const client = createClient(config.url, config.anonKey, { auth: { persistSession: true, detectSessionInUrl: true } });
+    state.sync.client = client;
+    state.sync.available = true;
+    const { data: { user } } = await client.auth.getUser();
+    state.sync.user = user || null;
+    client.auth.onAuthStateChange(async (_event, session) => {
+      state.sync.user = session?.user || null;
+      if (state.sync.user) await syncCloud({ initial: true });
+      renderAll();
+    });
+    if (user) await syncCloud({ initial: true });
+  } catch (error) {
+    console.info('Sinkronisasi cloud belum aktif:', error.message);
+  }
+}
+
+async function syncCloud({ initial = false } = {}) {
+  const { client, user } = state.sync;
+  if (!client || !user || state.sync.syncing || !navigator.onLine) return;
+  state.sync.syncing = true;
+  try {
+    setSyncStatus('Menyinkronkan...', 'pending');
+    const { data: remote, error: readError } = await client.from('finspace_snapshots').select('data, updated_at').eq('user_id', user.id).maybeSingle();
+    if (readError) throw readError;
+    if (remote?.data) await applyCloudSnapshot(remote.data, { merge: initial });
+    const { error: writeError } = await client.from('finspace_snapshots').upsert({ user_id: user.id, data: snapshotData() }, { onConflict: 'user_id' });
+    if (writeError) throw writeError;
+    setSyncStatus(`Tersinkron ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`, 'connected');
+  } catch (error) {
+    console.info('Sinkronisasi gagal:', error.message);
+    setSyncStatus('Offline atau sinkronisasi perlu disiapkan', '');
+  } finally {
+    state.sync.syncing = false;
+  }
+}
+
+let syncTimer = null;
+function scheduleCloudSync() {
+  window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(() => syncCloud(), 700);
+}
+
+async function sendMagicLink(event) {
+  event.preventDefault();
+  const email = $('#account-email').value.trim();
+  if (!state.sync.client) {
+    $('#account-message').textContent = 'Sinkronisasi belum dikonfigurasi di server.';
+    return;
+  }
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    $('#account-message').textContent = 'Masukkan alamat email yang valid.';
+    return;
+  }
+  const button = $('#send-magic-link');
+  button.disabled = true;
+  $('#account-message').textContent = '';
+  try {
+    const { error } = await state.sync.client.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    if (error) throw error;
+    $('#account-message').textContent = 'Tautan masuk sudah dikirim. Buka email ini pada perangkat yang ingin kamu sinkronkan.';
+  } catch (error) {
+    $('#account-message').textContent = error.message || 'Tautan masuk tidak dapat dikirim.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function signOutCloud() {
+  if (!state.sync.client || !await requestConfirmation({ title: 'Keluar dari akun?', message: 'Data lokal tetap ada di perangkat ini. Sinkronisasi akan berhenti sampai kamu masuk lagi.', confirmLabel: 'Keluar', danger: false })) return;
+  await state.sync.client.auth.signOut();
+  state.sync.user = null;
+  renderAll();
+  showToast('Kamu sudah keluar dari akun sinkronisasi.');
+}
+
+async function saveReceiptToCloud() {
+  if (!state.receiptImage || !state.sync.client || !state.sync.user) return null;
+  try {
+    const blob = await fetch(state.receiptImage.dataUrl).then((response) => response.blob());
+    const extension = state.receiptImage.mimeType.split('/')[1] || 'jpg';
+    const path = `${state.sync.user.id}/${uid()}.${extension}`;
+    const { error } = await state.sync.client.storage.from('receipts').upload(path, blob, { contentType: state.receiptImage.mimeType, upsert: false });
+    if (error) throw error;
+    return path;
+  } catch (error) {
+    console.info('Foto struk tidak diunggah:', error.message);
+    return null;
+  }
 }
 
 async function saveSettings(patch) {
@@ -882,6 +1306,7 @@ async function saveSettings(patch) {
   try {
     await dbPut('settings', state.settings);
     renderAll();
+    scheduleCloudSync();
   } catch (error) {
     showToast('Pengaturan belum tersimpan. Coba lagi.', 'error');
   }
@@ -913,6 +1338,13 @@ function bindEvents() {
     const editBudgetButton = event.target.closest('[data-edit-budget]');
     if (editBudgetButton) openBudgetDialog(state.budgets.find((item) => item.id === editBudgetButton.dataset.editBudget));
     if (event.target.closest('[data-add-budget]')) openBudgetDialog();
+    const editGoalButton = event.target.closest('[data-edit-goal]');
+    if (editGoalButton) openGoalDialog(state.goals.find((item) => item.id === editGoalButton.dataset.editGoal));
+    const deleteGoalButton = event.target.closest('[data-delete-goal]');
+    if (deleteGoalButton) await deleteGoal(deleteGoalButton.dataset.deleteGoal);
+    const updateGoalButton = event.target.closest('[data-update-goal]');
+    if (updateGoalButton) openGoalProgressDialog(state.goals.find((item) => item.id === updateGoalButton.dataset.updateGoal));
+    if (event.target.closest('[data-add-goal]')) openGoalDialog();
   });
   $$('.dialog-close').forEach((button) => button.addEventListener('click', closeCapture));
   $$('.compact-close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
@@ -923,20 +1355,29 @@ function bindEvents() {
   });
   $('#manual-tab').addEventListener('click', () => switchCaptureMode('manual'));
   $('#ai-tab').addEventListener('click', () => switchCaptureMode('ai'));
+  $('#receipt-tab').addEventListener('click', () => switchCaptureMode('receipt'));
   $$('input[name="type"]').forEach((input) => input.addEventListener('change', () => renderCategoryOptions()));
   $('#transaction-form').addEventListener('submit', saveTransactionFromForm);
   $('#amount').addEventListener('input', (event) => formatAmountInput(event.target));
   $('#wallet-opening-balance').addEventListener('input', (event) => formatAmountInput(event.target));
   $('#budget-limit').addEventListener('input', (event) => formatAmountInput(event.target));
+  $('#goal-target').addEventListener('input', (event) => formatAmountInput(event.target));
+  $('#goal-current').addEventListener('input', (event) => formatAmountInput(event.target));
+  $('#goal-progress-amount').addEventListener('input', (event) => formatAmountInput(event.target));
   $('#history-search').addEventListener('input', renderHistory);
   $('#history-filter').addEventListener('change', renderHistory);
   $('#add-wallet-button').addEventListener('click', () => openWalletDialog());
   $('#add-budget-button').addEventListener('click', () => openBudgetDialog());
+  $('#add-goal-button').addEventListener('click', () => openGoalDialog());
   $('#wallet-form').addEventListener('submit', saveWallet);
   $('#budget-form').addEventListener('submit', saveBudget);
+  $('#goal-form').addEventListener('submit', saveGoal);
+  $('#goal-progress-form').addEventListener('submit', saveGoalProgress);
   $('#parse-ai').addEventListener('click', parseWithAI);
   $('#edit-ai-draft').addEventListener('click', putAIDraftIntoForm);
   $('#confirm-ai-draft').addEventListener('click', confirmAIDraft);
+  $('#receipt-file').addEventListener('change', (event) => selectReceipt(event.target.files[0]).catch((error) => { $('#receipt-message').textContent = error.message; }));
+  $('#parse-receipt').addEventListener('click', parseReceipt);
   $('#privacy-toggle').addEventListener('click', () => saveSettings({ hideMoney: !state.settings.hideMoney }));
   $('#theme-toggle').addEventListener('click', () => saveSettings({ theme: effectiveTheme() === 'dark' ? 'light' : 'dark' }));
   $('#theme-select').addEventListener('change', (event) => saveSettings({ theme: event.target.value }).then(() => showToast('Tema aplikasi diperbarui.')));
@@ -945,19 +1386,33 @@ function bindEvents() {
   $('#export-json').addEventListener('click', exportJSON);
   $('#export-csv').addEventListener('click', exportCSV);
   $('#import-json').addEventListener('change', (event) => event.target.files[0] && importJSON(event.target.files[0]));
+  $('#connect-account').addEventListener('click', () => {
+    if (!state.sync.available) { showToast('Tambahkan konfigurasi Supabase di Vercel terlebih dahulu.', 'error'); return; }
+    $('#account-form').reset();
+    $('#account-message').textContent = '';
+    $('#account-dialog').showModal();
+    window.setTimeout(() => $('#account-email').focus(), 50);
+  });
+  $('#account-form').addEventListener('submit', sendMagicLink);
+  $('#sync-now').addEventListener('click', async () => { await syncCloud(); renderAll(); });
+  $('#sign-out').addEventListener('click', signOutCloud);
   $('#reset-data').addEventListener('click', async () => {
     if (!await requestConfirmation({ title: 'Reset semua data?', message: 'Semua dompet, transaksi, anggaran, dan pengaturan pada browser ini akan dihapus permanen.', confirmLabel: 'Reset semua data' })) return;
     await dbClearAll();
     state.wallets = [];
     state.transactions = [];
     state.budgets = [];
+    state.goals = [];
     state.settings = { id: 'profile', name: '', aiEnabled: true, hideMoney: false, theme: 'system' };
     await loadState();
     setView('dashboard');
+    scheduleCloudSync();
     showToast('Semua data lokal sudah direset.');
   });
   window.addEventListener('online', updateConnectionStatus);
   window.addEventListener('offline', updateConnectionStatus);
+  window.addEventListener('online', () => scheduleCloudSync());
+  window.addEventListener('focus', () => scheduleCloudSync());
   systemTheme.addEventListener('change', () => {
     if (state.settings.theme === 'system') applyTheme();
   });
@@ -991,6 +1446,8 @@ async function init() {
     updateConnectionStatus();
     $('#transaction-date').value = todayISO();
     setView(location.hash.slice(1) || 'dashboard');
+    await initCloudSync();
+    renderAll();
     await registerServiceWorker();
     if (new URLSearchParams(location.search).get('action') === 'capture') window.setTimeout(() => openCapture(), 200);
   } catch (error) {

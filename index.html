@@ -34,7 +34,8 @@
           <button class="nav-item" data-view="history" type="button"><span>02</span> Riwayat</button>
           <button class="nav-item" data-view="wallets" type="button"><span>03</span> Dompet</button>
           <button class="nav-item" data-view="budgets" type="button"><span>04</span> Anggaran</button>
-          <button class="nav-item" data-view="settings" type="button"><span>05</span> Pengaturan</button>
+          <button class="nav-item" data-view="goals" type="button"><span>05</span> Goals</button>
+          <button class="nav-item" data-view="settings" type="button"><span>06</span> Pengaturan</button>
         </nav>
 
         <div class="sidebar-foot">
@@ -149,6 +150,17 @@
                 <div id="recent-transactions" class="transaction-list"></div>
               </article>
             </section>
+
+            <section class="health-section brutal-panel" aria-labelledby="health-title">
+              <div class="health-score-orb" id="health-score-orb" aria-hidden="true"><strong id="health-score">0</strong><span>/100</span></div>
+              <div class="health-copy">
+                <span class="terminal-label">KESEHATAN FINANSIAL</span>
+                <h2 id="health-title">Mulai ukur kebiasaanmu.</h2>
+                <p id="health-summary">Catat transaksi untuk membangun skor yang lebih akurat.</p>
+                <div class="health-factors" id="health-factors"></div>
+              </div>
+              <button class="text-button health-link" data-view-link="goals" type="button">Lihat goals →</button>
+            </section>
           </section>
 
           <section class="view" id="view-history" data-view-panel="history" aria-labelledby="history-title">
@@ -201,6 +213,18 @@
             <div class="budget-grid" id="budget-grid"></div>
           </section>
 
+          <section class="view" id="view-goals" data-view-panel="goals" aria-labelledby="goals-title">
+            <div class="page-intro intro-with-action">
+              <div>
+                <span class="terminal-label">ARAH KEUANGAN</span>
+                <h2 id="goals-title">Goals saya</h2>
+                <p>Ubah target besar menjadi langkah kecil yang terukur, tanpa mengubah saldo dompetmu.</p>
+              </div>
+              <button class="button button-primary" id="add-goal-button" type="button">＋ Buat goal</button>
+            </div>
+            <div class="goal-grid" id="goal-grid"></div>
+          </section>
+
           <section class="view" id="view-settings" data-view-panel="settings" aria-labelledby="settings-title">
             <div class="page-intro">
               <span class="terminal-label">KONTROL DATA</span>
@@ -210,6 +234,7 @@
             <div class="more-menu" aria-label="Menu pengelolaan">
               <button class="button button-primary" data-view-link="budgets" type="button">Kelola anggaran</button>
               <button class="button button-secondary" data-view-link="wallets" type="button">Kelola dompet</button>
+              <button class="button button-secondary" data-view-link="goals" type="button">Kelola goals</button>
               <button class="button button-secondary" data-view-link="history" type="button">Buka riwayat</button>
             </div>
             <div class="settings-grid">
@@ -246,6 +271,17 @@
               </article>
               <article class="brutal-panel setting-panel">
                 <span class="setting-index">04</span>
+                <h3>Sinkronisasi</h3>
+                <p id="sync-description">Masuk dengan email yang sama di laptop dan HP untuk menyinkronkan data secara aman.</p>
+                <div class="account-state" id="account-state">Mode lokal</div>
+                <div class="button-stack">
+                  <button class="button button-primary" id="connect-account" type="button">Hubungkan akun</button>
+                  <button class="button button-secondary" id="sync-now" type="button" hidden>Sinkronkan sekarang</button>
+                  <button class="button button-secondary" id="sign-out" type="button" hidden>Keluar</button>
+                </div>
+              </article>
+              <article class="brutal-panel setting-panel">
+                <span class="setting-index">05</span>
                 <h3>Backup data</h3>
                 <p>Unduh semua dompet, transaksi, anggaran, dan preferensi sebagai JSON.</p>
                 <div class="button-stack">
@@ -255,7 +291,7 @@
                 </div>
               </article>
               <article class="brutal-panel setting-panel danger-panel">
-                <span class="setting-index">05</span>
+                <span class="setting-index">06</span>
                 <h3>Zona berbahaya</h3>
                 <p>Reset menghapus seluruh data FinSpace pada browser ini.</p>
                 <button class="button button-danger" id="reset-data" type="button">Reset semua data</button>
@@ -270,7 +306,7 @@
       <button class="mobile-nav-item active" data-view="dashboard" type="button"><span>⌂</span>Beranda</button>
       <button class="mobile-nav-item" data-view="history" type="button"><span>≡</span>Riwayat</button>
       <button class="mobile-capture" data-open-capture type="button" aria-label="Catat transaksi">＋</button>
-      <button class="mobile-nav-item" data-view="wallets" type="button"><span>▣</span>Dompet</button>
+      <button class="mobile-nav-item" data-view="goals" type="button"><span>◎</span>Goals</button>
       <button class="mobile-nav-item" data-view="settings" type="button"><span>···</span>Lainnya</button>
     </nav>
 
@@ -289,6 +325,7 @@
         <div class="mode-tabs" role="tablist" aria-label="Mode input">
           <button class="mode-tab active" id="manual-tab" role="tab" aria-selected="true" aria-controls="manual-panel" type="button">Manual</button>
           <button class="mode-tab" id="ai-tab" role="tab" aria-selected="false" aria-controls="ai-panel" type="button">Dengan AI</button>
+          <button class="mode-tab" id="receipt-tab" role="tab" aria-selected="false" aria-controls="receipt-panel" type="button">Scan struk</button>
         </div>
 
         <div id="manual-panel" role="tabpanel" aria-labelledby="manual-tab">
@@ -352,6 +389,21 @@
             </div>
           </div>
         </div>
+
+        <div id="receipt-panel" role="tabpanel" aria-labelledby="receipt-tab" hidden>
+          <div class="receipt-compose">
+            <label class="receipt-dropzone" for="receipt-file">
+              <input id="receipt-file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" />
+              <span class="receipt-icon" aria-hidden="true">▧</span>
+              <strong>Ambil foto atau pilih dari galeri</strong>
+              <small>JPG, PNG, atau WebP · maksimal 6 MB</small>
+            </label>
+            <img id="receipt-preview-image" class="receipt-image" alt="Pratinjau struk yang dipilih" hidden />
+            <button class="button button-dark button-full" id="parse-receipt" type="button" disabled>Analisis struk <span aria-hidden="true">↗</span></button>
+            <p class="privacy-copy">Foto diproses untuk membuat draf. Simpan foto ke cloud hanya saat sinkronisasi akun aktif.</p>
+            <p class="form-message" id="receipt-message" role="alert"></p>
+          </div>
+        </div>
       </section>
     </dialog>
 
@@ -383,6 +435,53 @@
         <label class="field"><span>Batas per bulan</span><input id="budget-limit" inputmode="numeric" required placeholder="500.000" /></label>
         <p class="form-message" id="budget-message" role="alert"></p>
         <button class="button button-primary button-full" id="save-budget" type="submit">Simpan anggaran</button>
+      </form>
+    </dialog>
+
+    <dialog class="compact-dialog" id="goal-dialog" aria-labelledby="goal-dialog-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <form class="compact-card" id="goal-form">
+        <header class="sheet-header">
+          <div><span class="terminal-label" id="goal-dialog-label">GOAL BARU</span><h2 id="goal-dialog-title">Buat tujuan</h2></div>
+          <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
+        </header>
+        <input type="hidden" id="goal-id" />
+        <label class="field"><span>Nama goal</span><input id="goal-name" maxlength="60" required placeholder="Contoh: Dana darurat" /></label>
+        <label class="field"><span>Target nominal</span><input id="goal-target" inputmode="numeric" required placeholder="10.000.000" /></label>
+        <label class="field"><span>Target tanggal</span><input id="goal-date" type="date" required /></label>
+        <label class="field"><span>Dana terkumpul</span><input id="goal-current" inputmode="numeric" placeholder="0" /></label>
+        <p class="form-message" id="goal-message" role="alert"></p>
+        <button class="button button-primary button-full" id="save-goal" type="submit">Simpan goal</button>
+      </form>
+    </dialog>
+
+    <dialog class="compact-dialog" id="goal-progress-dialog" aria-labelledby="goal-progress-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <form class="compact-card" id="goal-progress-form">
+        <header class="sheet-header">
+          <div><span class="terminal-label">UPDATE GOAL</span><h2 id="goal-progress-title">Tambah dana</h2></div>
+          <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
+        </header>
+        <input type="hidden" id="goal-progress-id" />
+        <p class="goal-progress-name" id="goal-progress-name"></p>
+        <label class="field"><span>Nominal perubahan</span><input id="goal-progress-amount" inputmode="numeric" required placeholder="500.000" /></label>
+        <label class="field"><span>Aksi</span><select id="goal-progress-type"><option value="add">Tambah dana</option><option value="subtract">Kurangi dana</option></select></label>
+        <p class="form-message" id="goal-progress-message" role="alert"></p>
+        <button class="button button-primary button-full" type="submit">Simpan progres</button>
+      </form>
+    </dialog>
+
+    <dialog class="compact-dialog" id="account-dialog" aria-labelledby="account-dialog-title">
+      <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
+      <form class="compact-card" id="account-form">
+        <header class="sheet-header">
+          <div><span class="terminal-label">SINKRON ANTAR PERANGKAT</span><h2 id="account-dialog-title">Hubungkan akun</h2></div>
+          <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
+        </header>
+        <p class="dialog-copy">Masukkan email yang akan dipakai pada laptop dan HP. Kami akan mengirim tautan masuk tanpa kata sandi.</p>
+        <label class="field"><span>Email</span><input id="account-email" type="email" autocomplete="email" required placeholder="nama@email.com" /></label>
+        <p class="form-message" id="account-message" role="alert"></p>
+        <button class="button button-primary button-full" id="send-magic-link" type="submit">Kirim tautan masuk</button>
       </form>
     </dialog>
 

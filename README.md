@@ -19,6 +19,24 @@ Buka `http://localhost:4173`. Fitur pencatatan lokal juga dapat berjalan ketika 
 3. Tambahkan `GEMINI_API_KEY`, `APP_ORIGIN`, dan opsional `GEMINI_MODEL` pada Environment Variables.
 4. Deploy.
 
+## Sinkronisasi laptop dan HP
+
+FinSpace tetap dapat dipakai secara lokal tanpa akun. Untuk mengaktifkan sinkronisasi, gunakan Supabase:
+
+1. Buat project Supabase, lalu jalankan [supabase/schema.sql](./supabase/schema.sql) melalui SQL Editor.
+2. Buat bucket Storage private bernama `receipts`.
+3. Pada Authentication → URL Configuration, tambahkan URL Vercel aplikasi ke Redirect URLs.
+4. Tambahkan `SUPABASE_URL` dan `SUPABASE_ANON_KEY` ke Environment Variables Vercel, lalu redeploy.
+5. Masuk melalui Pengaturan → Sinkronisasi menggunakan email yang sama di laptop dan HP.
+
+Data dari perangkat pertama akan dipadukan dengan data cloud secara aman berdasarkan waktu perubahan. Foto struk diunggah ke bucket private hanya setelah transaksi dikonfirmasi dan akun sinkronisasi aktif.
+
+## Goals, skor, dan scan struk
+
+- Goals adalah alokasi virtual: mengubah progres goal tidak otomatis mengubah saldo dompet.
+- Skor kesehatan finansial memakai arus kas, rasio menabung, kepatuhan anggaran, dana aman, dan konsistensi pencatatan bulan berjalan. Ini indikator kebiasaan, bukan nasihat keuangan profesional.
+- Scan struk menerima JPG, PNG, atau WebP hingga 6 MB. Gemini membuat draf pengeluaran; pengguna wajib memeriksa dan mengonfirmasi sebelum disimpan.
+
 Jika Gemini belum dikonfigurasi atau tidak dapat dihubungi, input AI memakai parser lokal sederhana. Hasil tetap menjadi draf dan membutuhkan konfirmasi.
 
 ## Data dan batas versi ini

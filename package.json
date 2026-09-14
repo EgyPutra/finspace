@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "npx serve . -l 4173",
-    "check": "node --check app.js && node --check api/gemini.js && node --check sw.js"
+    "check": "node --check app.js && node --check api/gemini.js && node --check api/receipt.js && node --check api/supabase-config.js && node --check sw.js"
   }
 }
