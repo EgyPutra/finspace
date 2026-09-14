@@ -9,6 +9,12 @@ function send(response, status, body) {
   response.status(status).setHeader('Content-Type', 'application/json; charset=utf-8').end(JSON.stringify(body));
 }
 
+async function geminiFailure(geminiResponse, fallback) {
+  const payload = await geminiResponse.json().catch(() => ({}));
+  const message = String(payload?.error?.message || '').replace(/AIza[\w-]+/g, '[redacted]').slice(0, 180);
+  return { error: message ? `${fallback} (${geminiResponse.status}: ${message})` : fallback };
+}
+
 function validateRequest(body) {
   if (!body || typeof body.text !== 'string' || !body.text.trim()) return 'Teks transaksi wajib diisi.';
   if (body.text.length > 1000) return 'Teks terlalu panjang.';
@@ -86,7 +92,7 @@ export default async function handler(request, response) {
         generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.1, maxOutputTokens: 500 },
       }),
     });
-    if (!geminiResponse.ok) return send(response, 502, { error: 'Gemini tidak dapat memproses permintaan.' });
+    if (!geminiResponse.ok) return send(response, 502, await geminiFailure(geminiResponse, 'Gemini tidak dapat memproses permintaan.'));
     const payload = await geminiResponse.json();
     const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return send(response, 502, { error: 'Respons Gemini kosong.' });
