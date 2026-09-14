@@ -38,6 +38,20 @@ function parseGeminiJson(text) {
   }
 }
 
+function parseGeminiParts(parts) {
+  const texts = (Array.isArray(parts) ? parts : []).map((part) => part?.text).filter(Boolean);
+  let lastError;
+  for (const text of [...texts].reverse()) {
+    try {
+      return parseGeminiJson(text);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (texts.length > 1) return parseGeminiJson(texts.join('\n'));
+  throw lastError || new Error('Respons Gemini kosong.');
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') return send(response, 405, { error: 'Method tidak didukung.' });
   if (!process.env.GEMINI_API_KEY) return send(response, 503, { error: 'Gemini belum dikonfigurasi.' });
@@ -86,8 +100,7 @@ export default async function handler(request, response) {
     });
     if (!geminiResponse.ok) return send(response, 502, await geminiFailure(geminiResponse, 'Gemini tidak dapat membaca struk.'));
     const payload = await geminiResponse.json();
-    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsed = parseGeminiJson(text);
+    const parsed = parseGeminiParts(payload.candidates?.[0]?.content?.parts);
     const draft = parsed.draft || {};
     const amount = String(draft.amount_idr ?? '').replace(/[^0-9]/g, '');
     const walletId = walletIds.includes(draft.wallet_id) ? draft.wallet_id : walletIds[0];
