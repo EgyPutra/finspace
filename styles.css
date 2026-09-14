@@ -451,6 +451,96 @@ html[data-theme="dark"] input,
 html[data-theme="dark"] select,
 html[data-theme="dark"] textarea { color-scheme: dark; }
 
+html[data-theme="midnight-violet"] {
+  color-scheme: dark;
+  --lime: #b9ff3d;
+  --purple: #a78bfa;
+  --purple-soft: #2f285f;
+  --ink: #f7f2ff;
+  --paper: #111126;
+  --white: #1a1933;
+  --muted: #c5bdd8;
+  --line: 2px solid #5d5a7e;
+  --shadow: 4px 4px 0 #070713;
+  --shadow-small: 2px 2px 0 #070713;
+}
+html[data-theme="midnight-violet"] body {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(115, 91, 255, .22), transparent 32%),
+    radial-gradient(circle at 82% 0%, rgba(65, 150, 255, .15), transparent 28%),
+    linear-gradient(rgba(255, 255, 255, .032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .032) 1px, transparent 1px),
+    var(--paper);
+}
+html[data-theme="midnight-violet"] .sidebar,
+html[data-theme="midnight-violet"] .topbar {
+  background: rgba(17, 17, 38, .94);
+  border-color: #5d5a7e;
+  backdrop-filter: blur(18px);
+}
+html[data-theme="midnight-violet"] .brand-mark,
+html[data-theme="midnight-violet"] .button-primary,
+html[data-theme="midnight-violet"] .button-lime,
+html[data-theme="midnight-violet"] .metric-surplus,
+html[data-theme="midnight-violet"] .balance-panel,
+html[data-theme="midnight-violet"] .status-light,
+html[data-theme="midnight-violet"] .mobile-capture,
+html[data-theme="midnight-violet"] .transaction-item[data-type="income"] .transaction-icon,
+html[data-theme="midnight-violet"] .transaction-item[data-type="income"] .transaction-amount output,
+html[data-theme="midnight-violet"] .toast.success { color: #0b0b16; }
+html[data-theme="midnight-violet"] .button-dark,
+html[data-theme="midnight-violet"] .insight-panel,
+html[data-theme="midnight-violet"] .metric-budget,
+html[data-theme="midnight-violet"] .capture-arrow,
+html[data-theme="midnight-violet"] .transaction-item[data-type="transfer"] .transaction-icon,
+html[data-theme="midnight-violet"] .toast {
+  background: #080816;
+  color: #f7f2ff;
+}
+html[data-theme="midnight-violet"] .balance-panel .terminal-label,
+html[data-theme="midnight-violet"] .balance-panel .change-badge,
+html[data-theme="midnight-violet"] .balance-panel .wallet-chip,
+html[data-theme="midnight-violet"] .balance-art {
+  background: #16152e;
+  color: #f7f2ff;
+}
+html[data-theme="midnight-violet"] .balance-panel .terminal-label,
+html[data-theme="midnight-violet"] .balance-panel .change-badge,
+html[data-theme="midnight-violet"] .balance-panel .wallet-chip,
+html[data-theme="midnight-violet"] .balance-art,
+html[data-theme="midnight-violet"] .art-card,
+html[data-theme="midnight-violet"] .art-coin { border-color: #080816; }
+html[data-theme="midnight-violet"] .balance-panel .wallet-chip span { color: #d9d2ea; }
+html[data-theme="midnight-violet"] .metric-expense { color: #0b0b16; }
+html[data-theme="midnight-violet"] .nav-item span,
+html[data-theme="midnight-violet"] .eyebrow,
+html[data-theme="midnight-violet"] .capture-banner small,
+html[data-theme="midnight-violet"] .transaction-copy small,
+html[data-theme="midnight-violet"] .transaction-amount small,
+html[data-theme="midnight-violet"] .empty-state p,
+html[data-theme="midnight-violet"] .page-intro p,
+html[data-theme="midnight-violet"] .setting-panel p,
+html[data-theme="midnight-violet"] .confirm-card p,
+html[data-theme="midnight-violet"] .privacy-copy,
+html[data-theme="midnight-violet"] .field > span small { color: #c5bdd8; }
+html[data-theme="midnight-violet"] .danger-panel { background: #301927; }
+html[data-theme="midnight-violet"] .health-copy p,
+html[data-theme="midnight-violet"] .receipt-dropzone small,
+html[data-theme="midnight-violet"] .goal-progress-name,
+html[data-theme="midnight-violet"] .dialog-copy { color: #c5bdd8; }
+html[data-theme="midnight-violet"] .button-danger,
+html[data-theme="midnight-violet"] .toast.error { color: #090912; }
+html[data-theme="midnight-violet"] .mobile-nav {
+  background: rgba(17, 17, 38, .96);
+  border-color: #5d5a7e;
+}
+html[data-theme="midnight-violet"] .money.masked::after { color: #f7f2ff; }
+html[data-theme="midnight-violet"] .metric-surplus .money.masked::after,
+html[data-theme="midnight-violet"] .balance-panel .money.masked::after { color: #0b0b16; }
+html[data-theme="midnight-violet"] input,
+html[data-theme="midnight-violet"] select,
+html[data-theme="midnight-violet"] textarea { color-scheme: dark; }
+
 @media (max-width: 1050px) {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .dashboard-grid.lower-grid { grid-template-columns: 1fr; }

@@ -6,6 +6,7 @@ const CATEGORIES = {
   expense: ['Makan & Minum', 'Transportasi', 'Belanja', 'Tagihan', 'Hiburan', 'Kesehatan', 'Pendidikan', 'Lainnya'],
   income: ['Gaji', 'Bonus', 'Bisnis', 'Pengembalian dana', 'Pendapatan lain'],
 };
+const THEMES = ['system', 'light', 'dark', 'midnight-violet'];
 
 const state = {
   wallets: [],
@@ -46,16 +47,16 @@ function effectiveTheme(preference = state.settings.theme || 'system') {
 }
 
 function applyTheme() {
-  const preference = ['system', 'light', 'dark'].includes(state.settings.theme) ? state.settings.theme : 'system';
+  const preference = THEMES.includes(state.settings.theme) ? state.settings.theme : 'system';
   const theme = effectiveTheme(preference);
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
   try { localStorage.setItem('finspace-theme', preference); } catch (error) { /* Tema tetap aktif untuk sesi ini. */ }
-  const dark = theme === 'dark';
+  const dark = theme === 'dark' || theme === 'midnight-violet';
   $('#theme-toggle').textContent = dark ? '◑' : '◐';
   $('#theme-toggle').setAttribute('aria-label', dark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap');
   $('#theme-toggle').title = dark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap';
-  $('#theme-color').content = dark ? '#101214' : '#ccff00';
+  $('#theme-color').content = theme === 'midnight-violet' ? '#111126' : dark ? '#101214' : '#ccff00';
 }
 
 function openDB() {
@@ -455,7 +456,7 @@ function renderSettings() {
   $('#display-name').value = state.settings.name || '';
   $('#ai-enabled').checked = state.settings.aiEnabled !== false;
   $('#ai-tab').disabled = state.settings.aiEnabled === false;
-  $('#theme-select').value = ['system', 'light', 'dark'].includes(state.settings.theme) ? state.settings.theme : 'system';
+  $('#theme-select').value = THEMES.includes(state.settings.theme) ? state.settings.theme : 'system';
   renderAccountState();
 }
 
@@ -1160,7 +1161,7 @@ function validateBackup(backup) {
     name: typeof settings.name === 'string' ? settings.name.slice(0, 40) : '',
     aiEnabled: settings.aiEnabled !== false,
     hideMoney: Boolean(settings.hideMoney),
-    theme: ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system',
+    theme: THEMES.includes(settings.theme) ? settings.theme : 'system',
   };
   backup.wallets = backup.wallets.map((wallet) => ({ ...wallet, name: wallet.name.trim(), openingBalance: Number(wallet.openingBalance), createdAt: timestamp(wallet.createdAt), updatedAt: timestamp(wallet.updatedAt || wallet.createdAt) }));
   backup.transactions = backup.transactions.map((item) => ({ ...item, amount: Number(item.amount), note: String(item.note || ''), destinationWalletId: item.type === 'transfer' ? item.destinationWalletId : null, category: item.type === 'transfer' ? null : item.category, createdAt: timestamp(item.createdAt), updatedAt: timestamp(item.updatedAt || item.createdAt) }));
