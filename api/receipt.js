@@ -25,7 +25,7 @@ export default async function handler(request, response) {
   } catch (error) {
     return send(response, 400, { error: 'Body JSON tidak valid.' });
   }
-  if (!body || typeof body.image !== 'string' || body.image.length > 8_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType)) return send(response, 422, { error: 'Foto struk tidak valid atau terlalu besar.' });
+  if (!body || typeof body.image !== 'string' || body.image.length > 4_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType)) return send(response, 422, { error: 'Foto struk tidak valid atau terlalu besar.' });
   if (!Array.isArray(body.wallets) || !body.wallets.length || !/^\d{4}-\d{2}-\d{2}$/.test(body.today || '')) return send(response, 422, { error: 'Konteks transaksi tidak valid.' });
   const walletIds = body.wallets.map((wallet) => wallet.id);
   const categories = body.categories || {};

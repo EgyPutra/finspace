@@ -915,20 +915,50 @@ async function selectReceipt(file) {
   state.receiptImage = null;
   $('#parse-receipt').disabled = true;
   if (!file) return;
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 6_000_000) {
-    $('#receipt-message').textContent = 'Gunakan JPG, PNG, atau WebP dengan ukuran maksimal 6 MB.';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 12_000_000) {
+    $('#receipt-message').textContent = 'Gunakan JPG, PNG, atau WebP dengan ukuran maksimal 12 MB.';
     return;
   }
+  $('#receipt-message').textContent = 'Menyiapkan foto struk...';
+  const prepared = await compressReceipt(file);
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error('Foto tidak dapat dibaca.'));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(prepared);
   });
-  state.receiptImage = { dataUrl, mimeType: file.type, name: file.name || `struk-${todayISO()}` };
+  state.receiptImage = { dataUrl, mimeType: 'image/jpeg', name: file.name || `struk-${todayISO()}` };
   $('#receipt-preview-image').src = dataUrl;
   $('#receipt-preview-image').hidden = false;
   $('#parse-receipt').disabled = false;
+  $('#receipt-message').textContent = 'Foto siap dianalisis.';
+}
+
+function compressReceipt(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = async () => {
+      URL.revokeObjectURL(objectUrl);
+      const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+      const scale = Math.min(1, 1800 / longestSide);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      const encode = (quality) => new Promise((done) => canvas.toBlob(done, 'image/jpeg', quality));
+      let blob = await encode(0.82);
+      if (blob && blob.size > 2_800_000) {
+        canvas.width = Math.max(1, Math.round(canvas.width * 0.72));
+        canvas.height = Math.max(1, Math.round(canvas.height * 0.72));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        blob = await encode(0.72);
+      }
+      if (blob) resolve(blob); else reject(new Error('Foto struk tidak dapat diproses.'));
+    };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Foto struk tidak dapat dibuka.')); };
+    image.src = objectUrl;
+  });
 }
 
 async function parseReceipt() {
@@ -950,7 +980,10 @@ async function parseReceipt() {
       }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || 'Struk tidak dapat dianalisis.');
+    if (!response.ok) {
+      const explanation = response.status === 413 ? 'Foto masih terlalu besar. Pilih foto lain atau potong area struk terlebih dahulu.' : result.error;
+      throw new Error(explanation || 'Struk tidak dapat dianalisis.');
+    }
     const normalized = normalizeAIDraft({ ...result, source: 'FOTO STRUK' });
     if (!normalized.draft.amount) throw new Error('Nominal pada struk belum terbaca. Isi manual untuk melanjutkan.');
     state.aiDraft = normalized.draft;

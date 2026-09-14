@@ -35,7 +35,7 @@ Data dari perangkat pertama akan dipadukan dengan data cloud berdasarkan waktu p
 
 - Goals adalah alokasi virtual: mengubah progres goal tidak otomatis mengubah saldo dompet.
 - Skor kesehatan finansial memakai arus kas, rasio menabung, kepatuhan anggaran, dana aman, dan konsistensi pencatatan bulan berjalan. Ini indikator kebiasaan, bukan nasihat keuangan profesional.
-- Scan struk menerima JPG, PNG, atau WebP hingga 6 MB. Gemini membuat draf pengeluaran; pengguna wajib memeriksa dan mengonfirmasi sebelum disimpan.
+- Scan struk menerima JPG, PNG, atau WebP hingga 12 MB lalu otomatis diperkecil sebelum dikirim. Gemini membuat draf pengeluaran; pengguna wajib memeriksa dan mengonfirmasi sebelum disimpan.
 
 Jika Gemini belum dikonfigurasi atau tidak dapat dihubungi, input AI memakai parser lokal sederhana. Hasil tetap menjadi draf dan membutuhkan konfirmasi.
 
