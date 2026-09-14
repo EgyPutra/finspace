@@ -3,10 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#ccff00" />
+    <meta name="theme-color" id="theme-color" content="#ccff00" />
     <meta name="description" content="FinSpace, pencatat keuangan pribadi yang cepat dan nyaman dipakai di HP." />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
+    <script>
+      (() => {
+        let saved = 'system';
+        try { saved = localStorage.getItem('finspace-theme') || 'system'; } catch (error) { /* Gunakan preferensi perangkat. */ }
+        const dark = saved === 'dark' || (saved === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
     <link rel="stylesheet" href="./styles.css" />
     <title>FinSpace</title>
   </head>
@@ -42,6 +50,7 @@
             <h1 id="page-title">Beranda</h1>
           </div>
           <div class="topbar-actions">
+            <button class="icon-button" id="theme-toggle" type="button" aria-label="Aktifkan mode gelap" title="Aktifkan mode gelap">◐</button>
             <button class="icon-button" id="privacy-toggle" type="button" aria-label="Sembunyikan nominal" title="Sembunyikan nominal">◎</button>
             <button class="button button-primary desktop-add" data-open-capture type="button"><span aria-hidden="true">＋</span> Catat transaksi</button>
           </div>
@@ -224,6 +233,19 @@
               </article>
               <article class="brutal-panel setting-panel">
                 <span class="setting-index">03</span>
+                <h3>Tampilan</h3>
+                <p>Pilih tema terang, gelap, atau ikuti pengaturan perangkat.</p>
+                <label class="field">
+                  <span>Tema aplikasi</span>
+                  <select id="theme-select">
+                    <option value="system">Ikuti perangkat</option>
+                    <option value="light">Terang</option>
+                    <option value="dark">Gelap</option>
+                  </select>
+                </label>
+              </article>
+              <article class="brutal-panel setting-panel">
+                <span class="setting-index">04</span>
                 <h3>Backup data</h3>
                 <p>Unduh semua dompet, transaksi, anggaran, dan preferensi sebagai JSON.</p>
                 <div class="button-stack">
@@ -233,7 +255,7 @@
                 </div>
               </article>
               <article class="brutal-panel setting-panel danger-panel">
-                <span class="setting-index">04</span>
+                <span class="setting-index">05</span>
                 <h3>Zona berbahaya</h3>
                 <p>Reset menghapus seluruh data FinSpace pada browser ini.</p>
                 <button class="button button-danger" id="reset-data" type="button">Reset semua data</button>
@@ -337,13 +359,15 @@
       <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
       <form class="compact-card" id="wallet-form">
         <header class="sheet-header">
-          <div><span class="terminal-label">DOMPET BARU</span><h2 id="wallet-dialog-title">Tambah sumber dana</h2></div>
+          <div><span class="terminal-label" id="wallet-dialog-label">DOMPET BARU</span><h2 id="wallet-dialog-title">Tambah sumber dana</h2></div>
           <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
         </header>
+        <input type="hidden" id="wallet-id" />
         <label class="field"><span>Nama dompet</span><input id="wallet-name" maxlength="30" required placeholder="Contoh: BCA" /></label>
         <label class="field"><span>Jenis</span><select id="wallet-type"><option value="bank">Bank</option><option value="ewallet">E-wallet</option><option value="cash">Tunai</option><option value="savings">Tabungan</option></select></label>
         <label class="field"><span>Saldo awal</span><input id="wallet-opening-balance" inputmode="numeric" placeholder="0" /></label>
-        <button class="button button-primary button-full" type="submit">Simpan dompet</button>
+        <p class="form-message" id="wallet-message" role="alert"></p>
+        <button class="button button-primary button-full" id="save-wallet" type="submit">Simpan dompet</button>
       </form>
     </dialog>
 
@@ -351,13 +375,28 @@
       <form method="dialog" class="dialog-backdrop"><button aria-label="Tutup"></button></form>
       <form class="compact-card" id="budget-form">
         <header class="sheet-header">
-          <div><span class="terminal-label">BATAS BULANAN</span><h2 id="budget-dialog-title">Atur anggaran</h2></div>
+          <div><span class="terminal-label" id="budget-dialog-label">BATAS BULANAN</span><h2 id="budget-dialog-title">Atur anggaran</h2></div>
           <button class="icon-button compact-close" type="button" aria-label="Tutup">×</button>
         </header>
+        <input type="hidden" id="budget-id" />
         <label class="field"><span>Kategori</span><select id="budget-category"></select></label>
         <label class="field"><span>Batas per bulan</span><input id="budget-limit" inputmode="numeric" required placeholder="500.000" /></label>
-        <button class="button button-primary button-full" type="submit">Simpan anggaran</button>
+        <p class="form-message" id="budget-message" role="alert"></p>
+        <button class="button button-primary button-full" id="save-budget" type="submit">Simpan anggaran</button>
       </form>
+    </dialog>
+
+    <dialog class="compact-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <form method="dialog" class="dialog-backdrop"><button value="cancel" aria-label="Batal"></button></form>
+      <section class="compact-card confirm-card">
+        <span class="terminal-label">KONFIRMASI</span>
+        <h2 id="confirm-title">Konfirmasi tindakan</h2>
+        <p id="confirm-message"></p>
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="confirm-cancel" type="button">Batal</button>
+          <button class="button button-danger" id="confirm-accept" type="button">Lanjutkan</button>
+        </div>
+      </section>
     </dialog>
 
     <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>

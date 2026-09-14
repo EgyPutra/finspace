@@ -229,6 +229,7 @@ main { width: min(100%, 1320px); margin: 0 auto; padding: 32px clamp(20px, 4vw, 
 .empty-state { padding: 36px 12px; text-align: center; }
 .empty-state strong { display: block; font: 800 19px 'Space Grotesk', sans-serif; }
 .empty-state p { max-width: 36ch; margin: 8px auto 0; color: #6f6969; font-size: 12px; line-height: 1.5; }
+.empty-state .button { margin-top: 18px; }
 
 .page-intro { margin: 12px 0 28px; max-width: 760px; }
 .page-intro h2 { margin: 12px 0 8px; font: 800 clamp(34px, 5vw, 66px)/.95 'Space Grotesk', sans-serif; letter-spacing: -.065em; }
@@ -257,7 +258,8 @@ main { width: min(100%, 1320px); margin: 0 auto; padding: 32px clamp(20px, 4vw, 
 .wallet-card h3, .budget-card h3 { margin: 20px 0 0; font: 800 23px 'Space Grotesk', sans-serif; letter-spacing: -.04em; }
 .wallet-card output { margin-top: auto; font: 800 clamp(25px, 3vw, 36px) 'Space Grotesk', sans-serif; letter-spacing: -.06em; }
 .wallet-card small { margin-top: 5px; font-size: 9px; }
-.wallet-delete, .budget-delete { border: 0; padding: 2px; background: transparent; text-decoration: underline; font-size: 9px; font-weight: 700; }
+.card-actions { display: flex; align-items: center; gap: 9px; }
+.card-actions button { border: 0; padding: 2px; background: transparent; text-decoration: underline; font-size: 9px; font-weight: 700; }
 .budget-card { min-height: 220px; }
 .budget-card output { margin-top: 16px; font: 800 27px 'Space Grotesk', sans-serif; }
 .budget-progress { height: 22px; border: var(--line); border-radius: 6px; background: var(--paper); overflow: hidden; margin-top: auto; }
@@ -324,6 +326,9 @@ dialog::backdrop { background: rgba(5, 5, 5, .56); }
 
 .compact-dialog { display: grid; place-items: center; padding: 20px; }
 .compact-card { position: relative; z-index: 1; width: min(460px, 100%); max-height: calc(100dvh - 40px); overflow: auto; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 8px 8px 0 var(--lime); padding: 22px; }
+.confirm-card h2 { margin: 18px 0 8px; font: 800 30px/1 'Space Grotesk', sans-serif; letter-spacing: -.045em; }
+.confirm-card p { margin: 0 0 24px; color: #5f5a5a; line-height: 1.55; }
+.confirm-card .dialog-actions { grid-template-columns: 1fr 1fr; }
 
 .toast-region { position: fixed; z-index: 100; right: 18px; bottom: 22px; display: grid; gap: 8px; pointer-events: none; }
 .toast { width: min(360px, calc(100vw - 36px)); border: var(--line); border-radius: 9px; box-shadow: var(--shadow); background: var(--ink); color: var(--white); padding: 13px 15px; font-size: 12px; font-weight: 700; animation: toast-in .2s ease both; }
@@ -335,6 +340,76 @@ dialog::backdrop { background: rgba(5, 5, 5, .56); }
 .money.masked { color: transparent !important; position: relative; user-select: none; }
 .money.masked::after { content: 'Rp ••••••'; position: absolute; inset: 0 auto auto 0; color: var(--ink); white-space: nowrap; }
 .metric-budget .money.masked::after, .insight-panel .money.masked::after { color: var(--lime); }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #f3f0e8;
+  --paper: #101214;
+  --white: #191c1f;
+  --muted: #aaa6a0;
+  --purple: #9b78e8;
+  --purple-soft: #3e3452;
+  --line: 2px solid #4c5156;
+  --shadow: 4px 4px 0 #050607;
+  --shadow-small: 2px 2px 0 #050607;
+}
+html[data-theme="dark"] body {
+  background:
+    linear-gradient(rgba(255, 255, 255, .026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .026) 1px, transparent 1px),
+    var(--paper);
+}
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .topbar { background: rgba(16, 18, 20, .96); border-color: #4c5156; }
+html[data-theme="dark"] .brand-mark,
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .button-lime,
+html[data-theme="dark"] .metric-surplus,
+html[data-theme="dark"] .balance-panel,
+html[data-theme="dark"] .status-light,
+html[data-theme="dark"] .mobile-capture,
+html[data-theme="dark"] .transaction-item[data-type="income"] .transaction-icon,
+html[data-theme="dark"] .transaction-item[data-type="income"] .transaction-amount output,
+html[data-theme="dark"] .toast.success { color: #070809; }
+html[data-theme="dark"] .button-dark,
+html[data-theme="dark"] .insight-panel,
+html[data-theme="dark"] .metric-budget,
+html[data-theme="dark"] .capture-arrow,
+html[data-theme="dark"] .transaction-item[data-type="transfer"] .transaction-icon,
+html[data-theme="dark"] .toast { background: #070809; color: #f3f0e8; }
+html[data-theme="dark"] .balance-panel .terminal-label,
+html[data-theme="dark"] .balance-panel .change-badge,
+html[data-theme="dark"] .balance-panel .wallet-chip,
+html[data-theme="dark"] .balance-art { background: #15181a; color: #f3f0e8; }
+html[data-theme="dark"] .balance-panel .terminal-label,
+html[data-theme="dark"] .balance-panel .change-badge,
+html[data-theme="dark"] .balance-panel .wallet-chip,
+html[data-theme="dark"] .balance-art,
+html[data-theme="dark"] .art-card,
+html[data-theme="dark"] .art-coin { border-color: #070809; }
+html[data-theme="dark"] .balance-panel .wallet-chip span { color: #b8b4ad; }
+html[data-theme="dark"] .metric-expense { color: #0a0b0c; }
+html[data-theme="dark"] .nav-item span,
+html[data-theme="dark"] .eyebrow,
+html[data-theme="dark"] .capture-banner small,
+html[data-theme="dark"] .transaction-copy small,
+html[data-theme="dark"] .transaction-amount small,
+html[data-theme="dark"] .empty-state p,
+html[data-theme="dark"] .page-intro p,
+html[data-theme="dark"] .setting-panel p,
+html[data-theme="dark"] .confirm-card p,
+html[data-theme="dark"] .privacy-copy,
+html[data-theme="dark"] .field > span small { color: #aaa6a0; }
+html[data-theme="dark"] .danger-panel { background: #29191b; }
+html[data-theme="dark"] .button-danger,
+html[data-theme="dark"] .toast.error { color: #090909; }
+html[data-theme="dark"] .mobile-nav { background: #101214; border-color: #4c5156; }
+html[data-theme="dark"] .money.masked::after { color: #f3f0e8; }
+html[data-theme="dark"] .metric-surplus .money.masked::after,
+html[data-theme="dark"] .balance-panel .money.masked::after { color: #070809; }
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { color-scheme: dark; }
 
 @media (max-width: 1050px) {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

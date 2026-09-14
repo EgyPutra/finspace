@@ -11,7 +11,7 @@ const state = {
   wallets: [],
   transactions: [],
   budgets: [],
-  settings: { id: 'profile', name: '', aiEnabled: true, hideMoney: false },
+  settings: { id: 'profile', name: '', aiEnabled: true, hideMoney: false, theme: 'system' },
   currentView: 'dashboard',
   aiDraft: null,
 };
@@ -35,6 +35,24 @@ const shortMoney = (value) => {
 };
 const dateLabel = (iso) => new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${iso}T12:00:00`));
 const escapeHTML = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+
+function effectiveTheme(preference = state.settings.theme || 'system') {
+  return preference === 'system' ? (systemTheme.matches ? 'dark' : 'light') : preference;
+}
+
+function applyTheme() {
+  const preference = ['system', 'light', 'dark'].includes(state.settings.theme) ? state.settings.theme : 'system';
+  const theme = effectiveTheme(preference);
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme;
+  try { localStorage.setItem('finspace-theme', preference); } catch (error) { /* Tema tetap aktif untuk sesi ini. */ }
+  const dark = theme === 'dark';
+  $('#theme-toggle').textContent = dark ? '◑' : '◐';
+  $('#theme-toggle').setAttribute('aria-label', dark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap');
+  $('#theme-toggle').title = dark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap';
+  $('#theme-color').content = dark ? '#101214' : '#ccff00';
+}
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -87,6 +105,21 @@ async function dbClearAll() {
   });
 }
 
+async function dbReplaceAll(backup) {
+  const db = await openDB();
+  const tx = db.transaction(STORES, 'readwrite');
+  for (const store of STORES) tx.objectStore(store).clear();
+  for (const wallet of backup.wallets) tx.objectStore('wallets').put(wallet);
+  for (const transaction of backup.transactions) tx.objectStore('transactions').put(transaction);
+  for (const budget of backup.budgets) tx.objectStore('budgets').put(budget);
+  tx.objectStore('settings').put(backup.settings);
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Pemulihan data dibatalkan.'));
+  });
+}
+
 async function seedData() {
   const wallets = await dbReadAll('wallets');
   if (!wallets.length) {
@@ -103,7 +136,7 @@ async function loadState() {
   state.wallets = wallets.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   state.transactions = transactions.sort(sortTransactions);
   state.budgets = budgets;
-  state.settings = settings.find((item) => item.id === 'profile') || state.settings;
+  state.settings = { ...state.settings, ...(settings.find((item) => item.id === 'profile') || {}) };
 }
 
 function sortTransactions(a, b) {
@@ -150,11 +183,36 @@ function showToast(message, type = 'success') {
   window.setTimeout(() => toast.remove(), 3400);
 }
 
+let confirmResolver = null;
+
+function requestConfirmation({ title, message, confirmLabel = 'Lanjutkan', danger = true }) {
+  const dialog = $('#confirm-dialog');
+  $('#confirm-title').textContent = title;
+  $('#confirm-message').textContent = message;
+  $('#confirm-accept').textContent = confirmLabel;
+  $('#confirm-accept').className = `button ${danger ? 'button-danger' : 'button-primary'}`;
+  if (dialog.open) dialog.close();
+  dialog.showModal();
+  window.setTimeout(() => $('#confirm-cancel').focus(), 50);
+  return new Promise((resolve) => { confirmResolver = resolve; });
+}
+
+function settleConfirmation(accepted) {
+  const resolver = confirmResolver;
+  confirmResolver = null;
+  if ($('#confirm-dialog').open) $('#confirm-dialog').close();
+  resolver?.(accepted);
+}
+
 function setView(view) {
   if (!document.querySelector(`[data-view-panel="${view}"]`)) view = 'dashboard';
   state.currentView = view;
   $$('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.viewPanel === view));
-  $$('[data-view]').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
+  $$('[data-view]').forEach((button) => {
+    const active = button.dataset.view === view;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+  });
   const titles = { dashboard: 'Beranda', history: 'Riwayat', wallets: 'Dompet', budgets: 'Anggaran', settings: 'Pengaturan' };
   $('#page-title').textContent = titles[view] || 'FinSpace';
   history.replaceState(null, '', `#${view}`);
@@ -163,6 +221,7 @@ function setView(view) {
 }
 
 function renderAll() {
+  applyTheme();
   renderHeader();
   renderWalletOptions();
   renderDashboard();
@@ -265,15 +324,15 @@ function transactionMarkup(transaction, allowActions) {
   const sign = transaction.type === 'income' ? '+' : transaction.type === 'expense' ? '-' : '↔';
   const label = transaction.note || transaction.category || 'Transfer dana';
   const meta = transaction.type === 'transfer' ? `${wallet?.name || 'Dompet'} ke ${destination?.name || 'Dompet'}` : `${transaction.category} · ${wallet?.name || 'Dompet'}`;
-  return `<article class="transaction-item" data-type="${transaction.type}" data-id="${transaction.id}">
+  return `<article class="transaction-item" data-type="${escapeHTML(transaction.type)}" data-id="${escapeHTML(transaction.id)}">
     <span class="transaction-icon" aria-hidden="true">${transaction.type === 'income' ? 'IN' : transaction.type === 'expense' ? 'OUT' : 'TR'}</span>
     <div class="transaction-copy"><strong>${escapeHTML(label)}</strong><small>${escapeHTML(meta)}</small></div>
-    <div class="transaction-amount"><output class="money">${sign}${transaction.type === 'transfer' ? money(transaction.amount) : money(transaction.amount)}</output><small>${dateLabel(transaction.date)}</small>${allowActions ? `<div class="transaction-actions"><button type="button" data-edit-transaction="${transaction.id}">Ubah</button><button type="button" data-delete-transaction="${transaction.id}">Hapus</button></div>` : ''}</div>
+    <div class="transaction-amount"><output class="money">${sign}${money(transaction.amount)}</output><small>${dateLabel(transaction.date)}</small>${allowActions ? `<div class="transaction-actions"><button type="button" data-edit-transaction="${escapeHTML(transaction.id)}">Ubah</button><button type="button" data-delete-transaction="${escapeHTML(transaction.id)}">Hapus</button></div>` : ''}</div>
   </article>`;
 }
 
-function emptyState(title, copy) {
-  return `<div class="empty-state"><strong>${escapeHTML(title)}</strong><p>${escapeHTML(copy)}</p></div>`;
+function emptyState(title, copy, action = '') {
+  return `<div class="empty-state"><strong>${escapeHTML(title)}</strong><p>${escapeHTML(copy)}</p>${action}</div>`;
 }
 
 function renderTransactionList(container, transactions, allowActions) {
@@ -293,12 +352,12 @@ function renderHistory() {
 }
 
 function renderWallets() {
-  $('#wallet-grid').innerHTML = state.wallets.map((wallet) => `<article class="wallet-card">
-    <div class="wallet-card-top"><span class="wallet-type">${walletTypeLabel(wallet.type)}</span><button class="wallet-delete" type="button" data-delete-wallet="${wallet.id}">Hapus</button></div>
+  $('#wallet-grid').innerHTML = state.wallets.length ? state.wallets.map((wallet) => `<article class="wallet-card">
+    <div class="wallet-card-top"><span class="wallet-type">${walletTypeLabel(wallet.type)}</span><div class="card-actions"><button type="button" data-edit-wallet="${escapeHTML(wallet.id)}">Ubah</button><button type="button" data-delete-wallet="${escapeHTML(wallet.id)}">Hapus</button></div></div>
     <h3>${escapeHTML(wallet.name)}</h3>
     <output class="money">${money(walletBalance(wallet.id))}</output>
     <small>Saldo awal ${money(wallet.openingBalance)}</small>
-  </article>`).join('');
+  </article>`).join('') : emptyState('Belum ada dompet', 'Tambahkan sumber dana sebelum mencatat transaksi.', '<button class="button button-primary" type="button" data-add-wallet>Tambah dompet</button>');
 }
 
 function walletTypeLabel(type) {
@@ -312,14 +371,15 @@ function renderBudgets() {
     const used = expenses.filter((item) => item.category === budget.category).reduce((sum, item) => sum + item.amount, 0);
     const percent = budget.limit ? Math.round((used / budget.limit) * 100) : 0;
     const remaining = budget.limit - used;
-    return `<article class="budget-card"><div class="budget-card-top"><span class="wallet-type">${monthKey()}</span><button class="budget-delete" type="button" data-delete-budget="${budget.id}">Hapus</button></div><h3>${escapeHTML(budget.category)}</h3><output class="money">${money(remaining)}</output><small>${remaining >= 0 ? 'tersisa' : 'melebihi batas'}</small><div class="budget-progress ${percent > 100 ? 'over' : ''}"><span style="width:${Math.min(100, Math.max(2, percent))}%"></span></div><div class="budget-meta"><span>${money(used)}</span><span>${percent}%</span></div></article>`;
-  }).join('') : emptyState('Belum ada anggaran', 'Tetapkan batas bulanan untuk kategori yang ingin kamu kendalikan.');
+    return `<article class="budget-card"><div class="budget-card-top"><span class="wallet-type">${monthKey()}</span><div class="card-actions"><button type="button" data-edit-budget="${escapeHTML(budget.id)}">Ubah</button><button type="button" data-delete-budget="${escapeHTML(budget.id)}">Hapus</button></div></div><h3>${escapeHTML(budget.category)}</h3><output class="money">${money(remaining)}</output><small>${remaining >= 0 ? 'tersisa' : 'melebihi batas'}</small><div class="budget-progress ${percent > 100 ? 'over' : ''}"><span style="width:${Math.min(100, Math.max(2, percent))}%"></span></div><div class="budget-meta"><span>${money(used)}</span><span>${percent}%</span></div></article>`;
+  }).join('') : emptyState('Belum ada anggaran', 'Tetapkan batas bulanan untuk kategori yang ingin kamu kendalikan.', '<button class="button button-primary" type="button" data-add-budget>Atur anggaran</button>');
 }
 
 function renderSettings() {
   $('#display-name').value = state.settings.name || '';
   $('#ai-enabled').checked = state.settings.aiEnabled !== false;
   $('#ai-tab').disabled = state.settings.aiEnabled === false;
+  $('#theme-select').value = ['system', 'light', 'dark'].includes(state.settings.theme) ? state.settings.theme : 'system';
 }
 
 function renderWalletOptions() {
@@ -355,7 +415,7 @@ function applyPrivacyMode() {
 function openCapture(transaction = null) {
   if (!state.wallets.length) {
     showToast('Tambahkan dompet terlebih dahulu.', 'error');
-    $('#wallet-dialog').showModal();
+    openWalletDialog();
     return;
   }
   resetTransactionForm();
@@ -454,7 +514,11 @@ async function saveTransactionFromForm(event) {
 async function deleteTransaction(id) {
   const transaction = state.transactions.find((item) => item.id === id);
   if (!transaction) return;
-  const accepted = confirm(`Hapus ${transaction.note || transaction.category || 'transfer'} senilai ${money(transaction.amount)}?`);
+  const accepted = await requestConfirmation({
+    title: 'Hapus transaksi?',
+    message: `${transaction.note || transaction.category || 'Transfer'} senilai ${money(transaction.amount)} akan dihapus dan saldo dihitung ulang.`,
+    confirmLabel: 'Hapus transaksi',
+  });
   if (!accepted) return;
   await dbDelete('transactions', id);
   state.transactions = state.transactions.filter((item) => item.id !== id);
@@ -462,22 +526,57 @@ async function deleteTransaction(id) {
   showToast('Transaksi dihapus.');
 }
 
-async function addWallet(event) {
+function openWalletDialog(wallet = null) {
+  $('#wallet-form').reset();
+  $('#wallet-id').value = wallet?.id || '';
+  $('#wallet-name').value = wallet?.name || '';
+  $('#wallet-type').value = wallet?.type || 'bank';
+  $('#wallet-opening-balance').value = wallet?.openingBalance ? new Intl.NumberFormat('id-ID').format(wallet.openingBalance) : '';
+  $('#wallet-message').textContent = '';
+  $('#wallet-dialog-label').textContent = wallet ? 'EDIT DOMPET' : 'DOMPET BARU';
+  $('#wallet-dialog-title').textContent = wallet ? 'Ubah sumber dana' : 'Tambah sumber dana';
+  $('#save-wallet').textContent = wallet ? 'Simpan perubahan' : 'Simpan dompet';
+  $('#wallet-dialog').showModal();
+  window.setTimeout(() => $('#wallet-name').focus(), 50);
+}
+
+async function saveWallet(event) {
   event.preventDefault();
+  const id = $('#wallet-id').value;
   const name = $('#wallet-name').value.trim();
   const openingBalance = amountValue($('#wallet-opening-balance').value);
-  if (!name) return;
-  if (state.wallets.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
-    showToast('Nama dompet sudah digunakan.', 'error');
+  const type = $('#wallet-type').value;
+  const existing = state.wallets.find((item) => item.id === id);
+  $('#wallet-message').textContent = '';
+  if (!name) {
+    $('#wallet-message').textContent = 'Nama dompet wajib diisi.';
+    $('#wallet-name').focus();
     return;
   }
-  const wallet = { id: uid(), name, type: $('#wallet-type').value, openingBalance, createdAt: new Date().toISOString() };
-  await dbPut('wallets', wallet);
-  state.wallets.push(wallet);
-  $('#wallet-form').reset();
-  $('#wallet-dialog').close();
-  renderAll();
-  showToast('Dompet baru ditambahkan.');
+  if (state.wallets.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
+    $('#wallet-message').textContent = 'Nama dompet sudah digunakan.';
+    $('#wallet-name').focus();
+    return;
+  }
+  if (openingBalance > 999_999_999_999) {
+    $('#wallet-message').textContent = 'Saldo awal maksimal Rp999.999.999.999.';
+    $('#wallet-opening-balance').focus();
+    return;
+  }
+  const wallet = { id: id || uid(), name, type, openingBalance, createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  $('#save-wallet').disabled = true;
+  try {
+    await dbPut('wallets', wallet);
+    const index = state.wallets.findIndex((item) => item.id === wallet.id);
+    if (index >= 0) state.wallets[index] = wallet; else state.wallets.push(wallet);
+    $('#wallet-dialog').close();
+    renderAll();
+    showToast(existing ? 'Perubahan dompet disimpan.' : 'Dompet baru ditambahkan.');
+  } catch (error) {
+    $('#wallet-message').textContent = 'Dompet belum tersimpan. Coba lagi.';
+  } finally {
+    $('#save-wallet').disabled = false;
+  }
 }
 
 async function deleteWallet(id) {
@@ -488,34 +587,67 @@ async function deleteWallet(id) {
     showToast('Dompet yang memiliki transaksi tidak dapat dihapus.', 'error');
     return;
   }
-  if (!confirm(`Hapus dompet ${wallet.name}?`)) return;
+  if (state.wallets.length === 1) {
+    showToast('Simpan minimal satu dompet untuk mencatat transaksi.', 'error');
+    return;
+  }
+  if (!await requestConfirmation({ title: 'Hapus dompet?', message: `${wallet.name} akan dihapus. Tindakan ini tidak dapat dibatalkan.`, confirmLabel: 'Hapus dompet' })) return;
   await dbDelete('wallets', id);
   state.wallets = state.wallets.filter((item) => item.id !== id);
   renderAll();
   showToast('Dompet dihapus.');
 }
 
-async function addBudget(event) {
+function openBudgetDialog(budget = null) {
+  $('#budget-form').reset();
+  $('#budget-id').value = budget?.id || '';
+  $('#budget-category').disabled = Boolean(budget);
+  if (budget) $('#budget-category').value = budget.category;
+  $('#budget-limit').value = budget?.limit ? new Intl.NumberFormat('id-ID').format(budget.limit) : '';
+  $('#budget-message').textContent = '';
+  $('#budget-dialog-label').textContent = budget ? 'EDIT BATAS' : 'BATAS BULANAN';
+  $('#budget-dialog-title').textContent = budget ? 'Ubah anggaran' : 'Atur anggaran';
+  $('#save-budget').textContent = budget ? 'Simpan perubahan' : 'Simpan anggaran';
+  $('#budget-dialog').showModal();
+  window.setTimeout(() => (budget ? $('#budget-limit') : $('#budget-category')).focus(), 50);
+}
+
+async function saveBudget(event) {
   event.preventDefault();
+  const id = $('#budget-id').value;
   const category = $('#budget-category').value;
   const limit = amountValue($('#budget-limit').value);
+  $('#budget-message').textContent = '';
   if (!category || !limit) {
-    showToast('Pilih kategori dan masukkan batas.', 'error');
+    $('#budget-message').textContent = 'Pilih kategori dan masukkan batas minimal Rp1.';
+    $('#budget-limit').focus();
     return;
   }
-  const old = state.budgets.find((item) => item.category === category && item.month === monthKey());
-  const budget = { id: old?.id || uid(), category, limit, month: monthKey(), createdAt: old?.createdAt || new Date().toISOString() };
-  await dbPut('budgets', budget);
-  state.budgets = state.budgets.filter((item) => item.id !== budget.id);
-  state.budgets.push(budget);
-  $('#budget-form').reset();
-  $('#budget-dialog').close();
-  renderAll();
-  showToast('Anggaran disimpan.');
+  if (limit > 999_999_999_999) {
+    $('#budget-message').textContent = 'Batas maksimal Rp999.999.999.999.';
+    $('#budget-limit').focus();
+    return;
+  }
+  const old = state.budgets.find((item) => item.id === id) || state.budgets.find((item) => item.category === category && item.month === monthKey());
+  const budget = { id: old?.id || uid(), category, limit, month: monthKey(), createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  $('#save-budget').disabled = true;
+  try {
+    await dbPut('budgets', budget);
+    state.budgets = state.budgets.filter((item) => item.id !== budget.id);
+    state.budgets.push(budget);
+    $('#budget-dialog').close();
+    renderAll();
+    showToast(old ? 'Perubahan anggaran disimpan.' : 'Anggaran disimpan.');
+  } catch (error) {
+    $('#budget-message').textContent = 'Anggaran belum tersimpan. Coba lagi.';
+  } finally {
+    $('#save-budget').disabled = false;
+  }
 }
 
 async function deleteBudget(id) {
-  if (!confirm('Hapus batas anggaran ini?')) return;
+  const budget = state.budgets.find((item) => item.id === id);
+  if (!budget || !await requestConfirmation({ title: 'Hapus anggaran?', message: `Batas untuk ${budget.category} bulan ini akan dihapus.`, confirmLabel: 'Hapus anggaran' })) return;
   await dbDelete('budgets', id);
   state.budgets = state.budgets.filter((item) => item.id !== id);
   renderAll();
@@ -525,11 +657,12 @@ async function deleteBudget(id) {
 function localParse(text) {
   const clean = text.trim();
   const lower = clean.toLowerCase();
-  const amountMatch = lower.match(/(?:rp\s*)?(\d+(?:[.,]\d+)?)\s*(jt|juta|rb|ribu|k)?/i);
+  const amountMatch = lower.match(/(?:rp\s*)?(\d+(?:[.,]\d+)*)\s*(jt|juta|rb|ribu|k)?/i);
   let parsedAmount = 0;
   if (amountMatch) {
-    const raw = Number(amountMatch[1].replace(',', '.'));
     const unit = amountMatch[2]?.toLowerCase();
+    const numeric = amountMatch[1];
+    const raw = unit ? Number(numeric.replace(',', '.')) : Number(numeric.replace(/[^0-9]/g, ''));
     parsedAmount = Math.round(raw * (unit === 'jt' || unit === 'juta' ? 1_000_000 : unit === 'rb' || unit === 'ribu' || unit === 'k' ? 1_000 : 1));
   }
   const transfer = /pindah|transfer|kirim/.test(lower);
@@ -633,15 +766,26 @@ function putAIDraftIntoForm() {
 
 async function confirmAIDraft() {
   if (!state.aiDraft) return;
-  putAIDraftIntoForm();
   const draft = state.aiDraft;
+  if (!draft.amount || !draft.walletId || (draft.type === 'transfer' && (!draft.destinationWalletId || draft.destinationWalletId === draft.walletId))) {
+    putAIDraftIntoForm();
+    $('#transaction-message').textContent = 'Periksa dompet asal, dompet tujuan, dan nominal sebelum menyimpan.';
+    return;
+  }
   const record = { id: uid(), ...draft, source: 'ai', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  await dbPut('transactions', record);
-  state.transactions.push(record);
-  state.transactions.sort(sortTransactions);
-  closeCapture();
-  renderAll();
-  showToast('Draf AI dikonfirmasi dan disimpan.');
+  $('#confirm-ai-draft').disabled = true;
+  try {
+    await dbPut('transactions', record);
+    state.transactions.push(record);
+    state.transactions.sort(sortTransactions);
+    closeCapture();
+    renderAll();
+    showToast('Draf AI dikonfirmasi dan disimpan.');
+  } catch (error) {
+    $('#ai-message').textContent = 'Draf belum tersimpan. Coba lagi atau edit detail secara manual.';
+  } finally {
+    $('#confirm-ai-draft').disabled = false;
+  }
 }
 
 function downloadBlob(filename, content, type) {
@@ -650,7 +794,7 @@ function downloadBlob(filename, content, type) {
   link.href = url;
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function exportJSON() {
@@ -674,15 +818,11 @@ function exportCSV() {
 
 async function importJSON(file) {
   try {
-    const backup = JSON.parse(await file.text());
-    if (backup.schemaVersion !== 1 || !Array.isArray(backup.wallets) || !Array.isArray(backup.transactions) || !Array.isArray(backup.budgets)) throw new Error('Format backup tidak dikenali.');
+    if (file.size > 5_000_000) throw new Error('Ukuran backup maksimal 5 MB.');
+    const backup = validateBackup(JSON.parse(await file.text()));
     const summary = `${backup.wallets.length} dompet, ${backup.transactions.length} transaksi, dan ${backup.budgets.length} anggaran`;
-    if (!confirm(`Pulihkan ${summary}? Data saat ini akan diganti.`)) return;
-    await dbClearAll();
-    for (const wallet of backup.wallets) await dbPut('wallets', wallet);
-    for (const transaction of backup.transactions) await dbPut('transactions', transaction);
-    for (const budget of backup.budgets) await dbPut('budgets', budget);
-    await dbPut('settings', { ...state.settings, ...(backup.settings || {}), id: 'profile' });
+    if (!await requestConfirmation({ title: 'Pulihkan backup?', message: `${summary} akan dipulihkan dan mengganti data saat ini.`, confirmLabel: 'Pulihkan data', danger: false })) return;
+    await dbReplaceAll(backup);
     await loadState();
     renderAll();
     showToast('Backup berhasil dipulihkan.');
@@ -693,10 +833,58 @@ async function importJSON(file) {
   }
 }
 
+function validateBackup(backup) {
+  if (!backup || backup.schemaVersion !== 1 || !Array.isArray(backup.wallets) || !Array.isArray(backup.transactions) || !Array.isArray(backup.budgets)) throw new Error('Format backup tidak dikenali.');
+  if (!backup.wallets.length || backup.wallets.length > 100 || backup.transactions.length > 50_000 || backup.budgets.length > 5_000) throw new Error('Jumlah data pada backup tidak valid.');
+  const validId = (value) => typeof value === 'string' && /^[a-zA-Z0-9._:-]{1,100}$/.test(value);
+  const validAmount = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 999_999_999_999;
+  const validDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+    const date = new Date(`${value}T12:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
+  const timestamp = (value) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : new Date().toISOString();
+  const walletIds = new Set();
+  for (const wallet of backup.wallets) {
+    if (!validId(wallet.id) || walletIds.has(wallet.id) || typeof wallet.name !== 'string' || !wallet.name.trim() || wallet.name.length > 30 || !['bank', 'ewallet', 'cash', 'savings'].includes(wallet.type) || !validAmount(wallet.openingBalance)) throw new Error('Ada data dompet yang tidak valid.');
+    walletIds.add(wallet.id);
+  }
+  const transactionIds = new Set();
+  for (const item of backup.transactions) {
+    const typeValid = ['expense', 'income', 'transfer'].includes(item.type);
+    const categoryValid = item.type === 'transfer' ? item.category == null : CATEGORIES[item.type]?.includes(item.category);
+    const destinationValid = item.type !== 'transfer' || (walletIds.has(item.destinationWalletId) && item.destinationWalletId !== item.walletId);
+    if (!validId(item.id) || transactionIds.has(item.id) || !typeValid || !validAmount(item.amount) || Number(item.amount) < 1 || !walletIds.has(item.walletId) || !destinationValid || !categoryValid || !validDate(item.date) || String(item.note || '').length > 500) throw new Error('Ada data transaksi yang tidak valid.');
+    transactionIds.add(item.id);
+  }
+  const budgetIds = new Set();
+  for (const budget of backup.budgets) {
+    if (!validId(budget.id) || budgetIds.has(budget.id) || !CATEGORIES.expense.includes(budget.category) || !validAmount(budget.limit) || Number(budget.limit) < 1 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(budget.month || '')) throw new Error('Ada data anggaran yang tidak valid.');
+    budgetIds.add(budget.id);
+  }
+  const settings = backup.settings && typeof backup.settings === 'object' ? backup.settings : {};
+  backup.settings = {
+    id: 'profile',
+    name: typeof settings.name === 'string' ? settings.name.slice(0, 40) : '',
+    aiEnabled: settings.aiEnabled !== false,
+    hideMoney: Boolean(settings.hideMoney),
+    theme: ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system',
+  };
+  backup.wallets = backup.wallets.map((wallet) => ({ ...wallet, name: wallet.name.trim(), openingBalance: Number(wallet.openingBalance), createdAt: timestamp(wallet.createdAt), updatedAt: timestamp(wallet.updatedAt || wallet.createdAt) }));
+  backup.transactions = backup.transactions.map((item) => ({ ...item, amount: Number(item.amount), note: String(item.note || ''), destinationWalletId: item.type === 'transfer' ? item.destinationWalletId : null, category: item.type === 'transfer' ? null : item.category, createdAt: timestamp(item.createdAt), updatedAt: timestamp(item.updatedAt || item.createdAt) }));
+  backup.budgets = backup.budgets.map((budget) => ({ ...budget, limit: Number(budget.limit), createdAt: timestamp(budget.createdAt), updatedAt: timestamp(budget.updatedAt || budget.createdAt) }));
+  return backup;
+}
+
 async function saveSettings(patch) {
   state.settings = { ...state.settings, ...patch, id: 'profile' };
-  await dbPut('settings', state.settings);
-  renderAll();
+  if (patch.theme) applyTheme();
+  try {
+    await dbPut('settings', state.settings);
+    renderAll();
+  } catch (error) {
+    showToast('Pengaturan belum tersimpan. Coba lagi.', 'error');
+  }
 }
 
 function formatAmountInput(input) {
@@ -717,11 +905,22 @@ function bindEvents() {
     if (deleteButton) await deleteTransaction(deleteButton.dataset.deleteTransaction);
     const deleteWalletButton = event.target.closest('[data-delete-wallet]');
     if (deleteWalletButton) await deleteWallet(deleteWalletButton.dataset.deleteWallet);
+    const editWalletButton = event.target.closest('[data-edit-wallet]');
+    if (editWalletButton) openWalletDialog(state.wallets.find((item) => item.id === editWalletButton.dataset.editWallet));
+    if (event.target.closest('[data-add-wallet]')) openWalletDialog();
     const deleteBudgetButton = event.target.closest('[data-delete-budget]');
     if (deleteBudgetButton) await deleteBudget(deleteBudgetButton.dataset.deleteBudget);
+    const editBudgetButton = event.target.closest('[data-edit-budget]');
+    if (editBudgetButton) openBudgetDialog(state.budgets.find((item) => item.id === editBudgetButton.dataset.editBudget));
+    if (event.target.closest('[data-add-budget]')) openBudgetDialog();
   });
   $$('.dialog-close').forEach((button) => button.addEventListener('click', closeCapture));
   $$('.compact-close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
+  $('#confirm-cancel').addEventListener('click', () => settleConfirmation(false));
+  $('#confirm-accept').addEventListener('click', () => settleConfirmation(true));
+  $('#confirm-dialog').addEventListener('close', () => {
+    if (confirmResolver) settleConfirmation(false);
+  });
   $('#manual-tab').addEventListener('click', () => switchCaptureMode('manual'));
   $('#ai-tab').addEventListener('click', () => switchCaptureMode('ai'));
   $$('input[name="type"]').forEach((input) => input.addEventListener('change', () => renderCategoryOptions()));
@@ -731,33 +930,37 @@ function bindEvents() {
   $('#budget-limit').addEventListener('input', (event) => formatAmountInput(event.target));
   $('#history-search').addEventListener('input', renderHistory);
   $('#history-filter').addEventListener('change', renderHistory);
-  $('#add-wallet-button').addEventListener('click', () => $('#wallet-dialog').showModal());
-  $('#add-budget-button').addEventListener('click', () => $('#budget-dialog').showModal());
-  $('#wallet-form').addEventListener('submit', addWallet);
-  $('#budget-form').addEventListener('submit', addBudget);
+  $('#add-wallet-button').addEventListener('click', () => openWalletDialog());
+  $('#add-budget-button').addEventListener('click', () => openBudgetDialog());
+  $('#wallet-form').addEventListener('submit', saveWallet);
+  $('#budget-form').addEventListener('submit', saveBudget);
   $('#parse-ai').addEventListener('click', parseWithAI);
   $('#edit-ai-draft').addEventListener('click', putAIDraftIntoForm);
   $('#confirm-ai-draft').addEventListener('click', confirmAIDraft);
   $('#privacy-toggle').addEventListener('click', () => saveSettings({ hideMoney: !state.settings.hideMoney }));
+  $('#theme-toggle').addEventListener('click', () => saveSettings({ theme: effectiveTheme() === 'dark' ? 'light' : 'dark' }));
+  $('#theme-select').addEventListener('change', (event) => saveSettings({ theme: event.target.value }).then(() => showToast('Tema aplikasi diperbarui.')));
   $('#save-profile').addEventListener('click', () => saveSettings({ name: $('#display-name').value.trim() }).then(() => showToast('Nama disimpan.')));
   $('#ai-enabled').addEventListener('change', (event) => saveSettings({ aiEnabled: event.target.checked }).then(() => showToast(event.target.checked ? 'Input AI diaktifkan.' : 'Input AI dimatikan.')));
   $('#export-json').addEventListener('click', exportJSON);
   $('#export-csv').addEventListener('click', exportCSV);
   $('#import-json').addEventListener('change', (event) => event.target.files[0] && importJSON(event.target.files[0]));
   $('#reset-data').addEventListener('click', async () => {
-    if (!confirm('Hapus semua dompet, transaksi, anggaran, dan pengaturan pada browser ini?')) return;
-    if (!confirm('Tindakan ini tidak dapat dibatalkan. Lanjutkan reset?')) return;
+    if (!await requestConfirmation({ title: 'Reset semua data?', message: 'Semua dompet, transaksi, anggaran, dan pengaturan pada browser ini akan dihapus permanen.', confirmLabel: 'Reset semua data' })) return;
     await dbClearAll();
     state.wallets = [];
     state.transactions = [];
     state.budgets = [];
-    state.settings = { id: 'profile', name: '', aiEnabled: true, hideMoney: false };
+    state.settings = { id: 'profile', name: '', aiEnabled: true, hideMoney: false, theme: 'system' };
     await loadState();
     setView('dashboard');
     showToast('Semua data lokal sudah direset.');
   });
   window.addEventListener('online', updateConnectionStatus);
   window.addEventListener('offline', updateConnectionStatus);
+  systemTheme.addEventListener('change', () => {
+    if (state.settings.theme === 'system') applyTheme();
+  });
   window.addEventListener('hashchange', () => {
     const requestedView = location.hash.slice(1);
     if (requestedView && requestedView !== state.currentView) setView(requestedView);
