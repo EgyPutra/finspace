@@ -1226,6 +1226,14 @@ function setSyncStatus(message, type = '') {
   status.className = `account-state ${type}`;
 }
 
+function readableSyncError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  if (message.includes('finspace_snapshots') || message.includes('does not exist')) return 'Tabel sinkronisasi belum dibuat di Supabase.';
+  if (message.includes('row-level security') || message.includes('permission denied') || message.includes('policy')) return 'Policy Supabase belum lengkap untuk akun ini.';
+  if (message.includes('jwt') || message.includes('auth')) return 'Sesi login Supabase perlu diulang.';
+  return 'Sinkronisasi gagal. Coba tekan Sinkronkan sekarang.';
+}
+
 function renderAccountState() {
   const ready = state.sync.available;
   const user = state.sync.user;
@@ -1315,7 +1323,7 @@ function subscribeToCloud() {
 
 async function syncCloud({ initial = false } = {}) {
   const { client, user } = state.sync;
-  if (!client || !user || state.sync.syncing || !navigator.onLine) return;
+  if (!client || !user || state.sync.syncing || !navigator.onLine) return false;
   state.sync.syncing = true;
   try {
     setSyncStatus('Menyinkronkan...', 'pending');
@@ -1327,9 +1335,11 @@ async function syncCloud({ initial = false } = {}) {
     const { error: writeError } = await client.from('finspace_snapshots').upsert({ user_id: user.id, data: snapshot }, { onConflict: 'user_id' });
     if (writeError) throw writeError;
     setSyncStatus(`Tersinkron ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`, 'connected');
+    return true;
   } catch (error) {
     console.info('Sinkronisasi gagal:', error.message);
-    setSyncStatus('Offline atau sinkronisasi perlu disiapkan', '');
+    setSyncStatus(readableSyncError(error), '');
+    return false;
   } finally {
     state.sync.syncing = false;
   }
@@ -1484,7 +1494,11 @@ function bindEvents() {
     window.setTimeout(() => $('#account-email').focus(), 50);
   });
   $('#account-form').addEventListener('submit', sendMagicLink);
-  $('#sync-now').addEventListener('click', async () => { await syncCloud(); renderAll(); });
+  $('#sync-now').addEventListener('click', async () => {
+    const synced = await syncCloud();
+    renderAll();
+    showToast(synced ? 'Data berhasil disinkronkan.' : 'Sinkronisasi belum berhasil.', synced ? 'success' : 'error');
+  });
   $('#sign-out').addEventListener('click', signOutCloud);
   $('#reset-data').addEventListener('click', async () => {
     if (!await requestConfirmation({ title: 'Reset semua data?', message: 'Semua dompet, transaksi, anggaran, dan pengaturan pada browser ini akan dihapus permanen.', confirmLabel: 'Reset semua data' })) return;
