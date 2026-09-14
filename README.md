@@ -16,7 +16,7 @@ Buka `http://localhost:4173`. Fitur pencatatan lokal juga dapat berjalan ketika 
 
 1. Impor folder ini sebagai project Vercel.
 2. Framework preset dapat dibiarkan sebagai `Other` dan build command dikosongkan.
-3. Tambahkan `GEMINI_API_KEY`, `APP_ORIGIN`, dan opsional `GEMINI_MODEL` pada Environment Variables.
+3. Tambahkan `GEMINI_API_KEY`, `APP_ORIGIN`, dan opsional `GEMINI_MODEL=gemini-3.6-flash` pada Environment Variables.
 4. Deploy.
 
 ## Sinkronisasi laptop dan HP

@@ -1,4 +1,4 @@
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL === 'gemini-2.5-flash' ? 'gemini-3.6-flash' : (process.env.GEMINI_MODEL || 'gemini-3.6-flash');
 const requestsByClient = new Map();
 const ALLOWED_CATEGORIES = {
   expense: ['Makan & Minum', 'Transportasi', 'Belanja', 'Tagihan', 'Hiburan', 'Kesehatan', 'Pendidikan', 'Lainnya'],
