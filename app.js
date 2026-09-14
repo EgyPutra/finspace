@@ -17,7 +17,7 @@ const state = {
   aiDraft: null,
   receiptImage: null,
   freshInstall: false,
-  sync: { client: null, user: null, available: false, syncing: false, subscription: null },
+  sync: { client: null, user: null, available: false, syncing: false, subscription: null, lastUploadedAt: null },
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1217,13 +1217,52 @@ async function initCloudSync() {
     state.sync.user = user || null;
     client.auth.onAuthStateChange(async (_event, session) => {
       state.sync.user = session?.user || null;
-      if (state.sync.user) await syncCloud({ initial: true });
+      if (state.sync.user) {
+        await syncCloud({ initial: true });
+        subscribeToCloud();
+      } else {
+        unsubscribeFromCloud();
+      }
       renderAll();
     });
-    if (user) await syncCloud({ initial: true });
+    if (user) {
+      await syncCloud({ initial: true });
+      subscribeToCloud();
+    }
   } catch (error) {
     console.info('Sinkronisasi cloud belum aktif:', error.message);
   }
+}
+
+function unsubscribeFromCloud() {
+  if (state.sync.subscription && state.sync.client) state.sync.client.removeChannel(state.sync.subscription);
+  state.sync.subscription = null;
+  state.sync.lastUploadedAt = null;
+}
+
+function subscribeToCloud() {
+  const { client, user } = state.sync;
+  if (!client || !user || state.sync.subscription) return;
+  state.sync.subscription = client
+    .channel(`finspace-snapshot-${user.id}`)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'finspace_snapshots', filter: `user_id=eq.${user.id}`,
+    }, async (payload) => {
+      const data = payload.new?.data;
+      if (!data || data.updatedAt === state.sync.lastUploadedAt || state.sync.syncing) return;
+      state.sync.syncing = true;
+      try {
+        await applyCloudSnapshot(data, { merge: true });
+        setSyncStatus('Pembaruan dari perangkat lain diterapkan', 'connected');
+      } catch (error) {
+        console.info('Pembaruan realtime gagal:', error.message);
+      } finally {
+        state.sync.syncing = false;
+      }
+    })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.info('Realtime Supabase belum tersedia:', status);
+    });
 }
 
 async function syncCloud({ initial = false } = {}) {
@@ -1235,7 +1274,9 @@ async function syncCloud({ initial = false } = {}) {
     const { data: remote, error: readError } = await client.from('finspace_snapshots').select('data, updated_at').eq('user_id', user.id).maybeSingle();
     if (readError) throw readError;
     if (remote?.data) await applyCloudSnapshot(remote.data, { merge: initial });
-    const { error: writeError } = await client.from('finspace_snapshots').upsert({ user_id: user.id, data: snapshotData() }, { onConflict: 'user_id' });
+    const snapshot = snapshotData();
+    state.sync.lastUploadedAt = snapshot.updatedAt;
+    const { error: writeError } = await client.from('finspace_snapshots').upsert({ user_id: user.id, data: snapshot }, { onConflict: 'user_id' });
     if (writeError) throw writeError;
     setSyncStatus(`Tersinkron ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`, 'connected');
   } catch (error) {
@@ -1281,6 +1322,7 @@ async function signOutCloud() {
   if (!state.sync.client || !await requestConfirmation({ title: 'Keluar dari akun?', message: 'Data lokal tetap ada di perangkat ini. Sinkronisasi akan berhenti sampai kamu masuk lagi.', confirmLabel: 'Keluar', danger: false })) return;
   await state.sync.client.auth.signOut();
   state.sync.user = null;
+  unsubscribeFromCloud();
   renderAll();
   showToast('Kamu sudah keluar dari akun sinkronisasi.');
 }

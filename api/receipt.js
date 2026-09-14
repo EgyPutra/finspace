@@ -1,13 +1,30 @@
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const requestsByClient = new Map();
 
 function send(response, status, body) {
   response.status(status).setHeader('Content-Type', 'application/json; charset=utf-8').end(JSON.stringify(body));
 }
 
+function isRateLimited(request) {
+  const key = String(request.headers['x-forwarded-for'] || request.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  const now = Date.now();
+  const recent = (requestsByClient.get(key) || []).filter((time) => now - time < 60_000);
+  recent.push(now);
+  requestsByClient.set(key, recent);
+  return recent.length > 10;
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') return send(response, 405, { error: 'Method tidak didukung.' });
   if (!process.env.GEMINI_API_KEY) return send(response, 503, { error: 'Gemini belum dikonfigurasi.' });
-  const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  if (process.env.APP_ORIGIN && request.headers.origin !== process.env.APP_ORIGIN) return send(response, 403, { error: 'Origin tidak diizinkan.' });
+  if (isRateLimited(request)) return send(response, 429, { error: 'Terlalu banyak scan struk. Coba lagi sebentar.' });
+  let body;
+  try {
+    body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  } catch (error) {
+    return send(response, 400, { error: 'Body JSON tidak valid.' });
+  }
   if (!body || typeof body.image !== 'string' || body.image.length > 8_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(body.mimeType)) return send(response, 422, { error: 'Foto struk tidak valid atau terlalu besar.' });
   if (!Array.isArray(body.wallets) || !body.wallets.length || !/^\d{4}-\d{2}-\d{2}$/.test(body.today || '')) return send(response, 422, { error: 'Konteks transaksi tidak valid.' });
   const walletIds = body.wallets.map((wallet) => wallet.id);

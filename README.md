@@ -29,7 +29,7 @@ FinSpace tetap dapat dipakai secara lokal tanpa akun. Untuk mengaktifkan sinkron
 4. Tambahkan `SUPABASE_URL` dan `SUPABASE_ANON_KEY` ke Environment Variables Vercel, lalu redeploy.
 5. Masuk melalui Pengaturan → Sinkronisasi menggunakan email yang sama di laptop dan HP.
 
-Data dari perangkat pertama akan dipadukan dengan data cloud secara aman berdasarkan waktu perubahan. Foto struk diunggah ke bucket private hanya setelah transaksi dikonfirmasi dan akun sinkronisasi aktif.
+Data dari perangkat pertama akan dipadukan dengan data cloud berdasarkan waktu perubahan. Ketika kedua perangkat online, perubahan juga diterima langsung melalui Supabase Realtime. Foto struk diunggah ke bucket private hanya setelah transaksi dikonfirmasi dan akun sinkronisasi aktif.
 
 ## Goals, skor, dan scan struk
 
@@ -44,7 +44,7 @@ Jika Gemini belum dikonfigurasi atau tidak dapat dihubungi, input AI memakai par
 - Dompet, transaksi, anggaran, dan preferensi disimpan di IndexedDB browser.
 - Gunakan backup JSON dari Pengaturan secara rutin. CSV ditujukan untuk analisis, bukan pemulihan.
 - Sinkronisasi akun/cloud belum aktif karena membutuhkan project database dan kredensial pemilik.
-- API Gemini hanya menerima teks transaksi, tanggal hari ini, label dompet, dan daftar kategori. API key tidak pernah dikirim ke browser.
+- API Gemini hanya menerima teks transaksi, tanggal hari ini, label dompet, daftar kategori, atau foto struk yang dipilih pengguna. API key tidak pernah dikirim ke browser; endpoint dibatasi origin dan laju permintaan.
 
 ## Struktur
 
