@@ -1254,6 +1254,13 @@ async function initCloudSync() {
     const client = createClient(config.url, config.anonKey, { auth: { persistSession: true, detectSessionInUrl: true } });
     state.sync.client = client;
     state.sync.available = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('code')) {
+      const { error } = await client.auth.exchangeCodeForSession(window.location.href);
+      if (error) throw error;
+      window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+      showToast('Akun terhubung. Sinkronisasi aktif.');
+    }
     const { data: { user } } = await client.auth.getUser();
     state.sync.user = user || null;
     client.auth.onAuthStateChange(async (_event, session) => {
@@ -1349,7 +1356,7 @@ async function sendMagicLink(event) {
   button.disabled = true;
   $('#account-message').textContent = '';
   try {
-    const { error } = await state.sync.client.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    const { error } = await state.sync.client.auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}` } });
     if (error) throw error;
     $('#account-message').textContent = 'Tautan masuk sudah dikirim. Buka email ini pada perangkat yang ingin kamu sinkronkan.';
   } catch (error) {
