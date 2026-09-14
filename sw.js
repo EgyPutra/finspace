@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finspace-shell-v12';
+const CACHE_NAME = 'finspace-shell-v13';
 const APP_SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/assets/icon.svg'];
 
 self.addEventListener('install', (event) => {
